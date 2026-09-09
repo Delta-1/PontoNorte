@@ -201,6 +201,7 @@ create index members_department_idx on public.organization_members(department_id
 create index devices_employee_idx on public.authorized_devices(employee_id);
 create index devices_approved_by_idx on public.authorized_devices(approved_by);
 create index qr_created_by_idx on public.qr_sessions(created_by);
+create index qr_org_idx on public.qr_sessions(organization_id);
 create index entries_device_idx on public.time_entries(device_id);
 create index entries_terminal_idx on public.time_entries(terminal_id);
 create index terminals_org_idx on public.terminals(organization_id);
@@ -409,6 +410,8 @@ alter table public.attendance_call_items enable row level security;
 alter table public.biometric_consents enable row level security;
 alter table public.holidays enable row level security;
 alter table public.audit_logs enable row level security;
+
+create policy employee_secrets_deny on public.employee_secrets for all to authenticated using (false) with check (false);
 
 create policy organizations_read on public.organizations for select to authenticated using (private.is_org_member(id));
 create policy organizations_update on public.organizations for update to authenticated
