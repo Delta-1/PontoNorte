@@ -1,0 +1,65 @@
+name: Gerar aplicativo Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/build-android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Sincronizar projeto Android
+        run: npm run android:sync
+
+      - name: Compilar APK instalável
+        run: ./gradlew assembleDebug
+        working-directory: mobile/android
+
+      - name: Preparar arquivo
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk PontoNorte.apk
+
+      - name: Guardar artefato da compilação
+        uses: actions/upload-artifact@v4
+        with:
+          name: PontoNorte-Android
+          path: mobile/PontoNorte.apk
+          if-no-files-found: error
+
+      - name: Criar versão pública para download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view android-latest >/dev/null 2>&1 || \
+            gh release create android-latest --prerelease --title "PontoNorte Android" \
+              --notes "Aplicativo Android do funcionário. Gerado automaticamente pelo GitHub Actions."
+          gh release upload android-latest PontoNorte.apk --clobber

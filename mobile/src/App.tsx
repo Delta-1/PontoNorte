@@ -1,0 +1,104 @@
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import * as BarcodeModule from "@capacitor/barcode-scanner";
+import { Device } from "@capacitor/device";
+import { Geolocation } from "@capacitor/geolocation";
+import {
+  Building2, CalendarDays, Check, Clock3, FileCheck2, Fingerprint, History, LogOut,
+  MapPin, QrCode, RadioTower, RefreshCw, ShieldCheck, Smartphone, UserRound,
+} from "lucide-react";
+import { loginEmail, supabase } from "./supabase";
+
+type AppData={employee:any;organization:any;methods:any[];device:any|null;entries:any[];justifications:any[]};
+type TerminalData={terminal:any;organization:any;deviceUuid:string};
+const labels:Record<string,string>={entry:"Entrada",break_start:"Início do intervalo",break_end:"Fim do intervalo",exit:"Saída"};
+const methodLabels:Record<string,string>={mobile:"Botão no aplicativo",qr_code:"QR Code",face:"Reconhecimento facial"};
+const clock=(v:string)=>new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit"}).format(new Date(v));
+const dayStart=()=>{const d=new Date();d.setHours(0,0,0,0);return d.toISOString()};
+
+function Brand(){return <div className="brand"><span><RadioTower/></span><b>Ponto<em>Norte</em></b></div>}
+function Field({label,children}:{label:string;children:React.ReactNode}){return <label className="field"><span>{label}</span>{children}</label>}
+
+function Login({reload}:{reload:()=>void}){
+  const[mode,setMode]=useState<"employee"|"terminal">("employee");const[company,setCompany]=useState("");const[user,setUser]=useState("");const[password,setPassword]=useState("");const[error,setError]=useState("");const[busy,setBusy]=useState(false);
+  async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError("");const{error}=await supabase.auth.signInWithPassword({email:loginEmail(company,user),password});setBusy(false);if(error)setError("Código, usuário ou senha incorretos.");else reload()}
+  return <main className="screen login"><header><Brand/></header><div className="mode-switch"><button type="button" className={mode==="employee"?"active":""} onClick={()=>setMode("employee")}><UserRound/>Meu celular</button><button type="button" className={mode==="terminal"?"active":""} onClick={()=>setMode("terminal")}><Building2/>Terminal da empresa</button></div><section className="login-copy"><span>{mode==="terminal"?<Building2/>:<ShieldCheck/>}</span><h1>{mode==="terminal"?"Ativar terminal":"Registre seu ponto"}</h1><p>{mode==="terminal"?"Use o código e a senha criados pelo RH para este aparelho.":"Use os dados entregues pelo RH da sua empresa."}</p></section><form onSubmit={submit}><Field label="Código da empresa"><input required autoCapitalize="characters" value={company} onChange={e=>setCompany(e.target.value.toUpperCase())}/></Field><Field label={mode==="terminal"?"Código do terminal":"Usuário"}><input required autoCapitalize="none" value={user} onChange={e=>setUser(e.target.value.toLowerCase())}/></Field><Field label="Senha"><input required type="password" value={password} onChange={e=>setPassword(e.target.value)}/></Field>{error&&<p className="error">{error}</p>}<button className="primary" disabled={busy}>{busy?<RefreshCw className="spin"/>:"Entrar"}</button></form><footer><ShieldCheck/><span>Seus dados ficam separados e protegidos pela empresa.</span></footer></main>
+}
+
+function TerminalClock({data}:{data:TerminalData}){
+  const[employeeCode,setEmployeeCode]=useState("");const[pin,setPin]=useState("");const[busy,setBusy]=useState(false);const[message,setMessage]=useState("");const[success,setSuccess]=useState(false);
+  async function record(e:FormEvent){e.preventDefault();setBusy(true);setMessage("");setSuccess(false);try{let coords:any={};if(data.terminal.radius_meters){const permission=await Geolocation.requestPermissions();if(permission.location==="denied")throw new Error("Autorize a localização deste aparelho.");const pos=await Geolocation.getCurrentPosition({enableHighAccuracy:true,timeout:15000});coords={latitude:pos.coords.latitude,longitude:pos.coords.longitude,accuracy_meters:pos.coords.accuracy}}const{data:response,error}=await supabase.functions.invoke("terminal-clock-event",{body:{employee_code:employeeCode.trim(),pin,device_uuid:data.deviceUuid,client_event_id:crypto.randomUUID(),...coords}});if(error)throw error;if(response?.error)throw new Error(response.error);setSuccess(true);setMessage(`${labels[response.entry.event_type]} registrada às ${clock(response.entry.occurred_at)}.`);setEmployeeCode("");setPin("")}catch(error){setMessage(error instanceof Error?error.message:"Não foi possível registrar.")}finally{setBusy(false)}}
+  return <main className="screen terminal"><header><Brand/><button className="link" onClick={()=>supabase.auth.signOut().then(()=>location.reload())}>Sair</button></header><section className="terminal-head"><span><Building2/></span><p>{data.organization.trade_name}</p><h1>{data.terminal.name}</h1><time>{new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit"}).format(new Date())}</time><small>Terminal corporativo ativo</small></section><form className="terminal-form" onSubmit={record}><Field label="Matrícula"><input required inputMode="text" value={employeeCode} onChange={e=>setEmployeeCode(e.target.value)} placeholder="Digite sua matrícula"/></Field><Field label="PIN de 6 números"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,""))} placeholder="••••••"/></Field>{message&&<p className={success?"notice success":"notice"}>{message}</p>}<button className="primary" disabled={busy||pin.length!==6}>{busy?<RefreshCw className="spin"/>:<><Clock3/>Registrar ponto</>}</button></form><footer><ShieldCheck/>Após o registro, os campos são limpos para o próximo colaborador.</footer></main>
+}
+
+function Password({employee,reload}:{employee:any;reload:()=>void}){
+  const[password,setPassword]=useState("");const[confirm,setConfirm]=useState("");const[error,setError]=useState("");
+  async function submit(e:FormEvent){e.preventDefault();setError("");if(password.length<8)return setError("Use ao menos 8 caracteres.");if(password!==confirm)return setError("As senhas não coincidem.");const{error:a}=await supabase.auth.updateUser({password});if(a)return setError(a.message);const{error:b}=await supabase.functions.invoke("complete-first-access");if(b)return setError(b.message);reload()}
+  return <main className="screen login"><header><Brand/></header><section className="login-copy"><span><ShieldCheck/></span><h1>Crie uma nova senha</h1><p>A senha provisória só funciona no primeiro acesso.</p></section><form onSubmit={submit}><Field label="Nova senha"><input type="password" value={password} onChange={e=>setPassword(e.target.value)}/></Field><Field label="Confirmar senha"><input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)}/></Field>{error&&<p className="error">{error}</p>}<button className="primary">Salvar senha</button></form></main>
+}
+
+function PendingDevice({data,reload}:{data:AppData;reload:()=>void}){
+  return <main className="screen centered"><Brand/><span className="big-icon"><Smartphone/></span><h1>Autorize este celular</h1><p>Este aparelho foi vinculado ao seu usuário. Peça ao RH ou ao líder responsável para aprová-lo antes do primeiro ponto.</p><div className="device-box"><b>{data.device?.device_name||"Celular Android"}</b><small>{data.device?.device_uuid}</small></div><button className="primary" onClick={reload}><RefreshCw/>Verificar autorização</button><button className="link" onClick={()=>supabase.auth.signOut().then(()=>location.reload())}>Sair</button></main>
+}
+
+function Home({data,reload}:{data:AppData;reload:()=>void}){
+  const[busy,setBusy]=useState("");const[message,setMessage]=useState("");const[tab,setTab]=useState<"home"|"history"|"justification"|"profile">("home");
+  const next=["entry","break_start","break_end","exit"][Math.min(data.entries.length,3)];
+  async function getLocation(){
+    const permission=await Geolocation.requestPermissions();
+    if(permission.location==="denied")throw new Error("Autorize a localização nas configurações do celular.");
+    const pos=await Geolocation.getCurrentPosition({enableHighAccuracy:true,timeout:15000});
+    return {latitude:pos.coords.latitude,longitude:pos.coords.longitude,accuracy_meters:pos.coords.accuracy};
+  }
+  async function record(method:"mobile"|"qr_code"|"face"){
+    setBusy(method);setMessage("");
+    try{
+      const coords=await getLocation();let qr_token: string|undefined;
+      if(method==="qr_code"){
+        const result=await (BarcodeModule as any).CapacitorBarcodeScanner.scanBarcode({hint:17,scanInstructions:"Aponte para o QR Code da empresa"});
+        if(!result.ScanResult)throw new Error("Nenhum QR Code foi lido.");
+        qr_token=result.ScanResult;
+      }
+      if(method==="face")throw new Error("A empresa ainda precisa configurar o provedor de prova de vida.");
+      const client_event_id=crypto.randomUUID();
+      const {data:response,error}=await supabase.functions.invoke("clock-event",{body:{method,client_event_id,device_uuid:data.device.device_uuid,app_version:"1.0.0",qr_token,...coords}});
+      if(error)throw error;if(response?.error)throw new Error(response.error);
+      setMessage(`${labels[response.entry.event_type]} registrada às ${clock(response.entry.occurred_at)}.`);reload();
+    }catch(e){setMessage(e instanceof Error?e.message:"Não foi possível registrar.");}finally{setBusy("")}
+  }
+  if(tab==="history")return <main className="screen app"><Top data={data}/><section className="content"><h1>Meus pontos</h1><p className="subtitle">Histórico de hoje</p><div className="card timeline">{data.entries.length?data.entries.map(e=><div key={e.id}><span className="done"><Check/></span><p><b>{labels[e.event_type]}</b><small>{methodLabels[e.method]||e.method}</small></p><time>{clock(e.occurred_at)}</time></div>):<p>Nenhum registro hoje.</p>}</div></section><Nav tab={tab} setTab={setTab}/></main>;
+  if(tab==="justification")return <Justifications data={data} reload={reload} tab={tab} setTab={setTab}/>;
+  if(tab==="profile")return <main className="screen app"><Top data={data}/><section className="content"><h1>Meu perfil</h1><div className="card profile"><span>{data.employee.full_name.split(" ").slice(0,2).map((x:string)=>x[0]).join("")}</span><h2>{data.employee.full_name}</h2><p>{data.employee.job_title||"Funcionário"}</p><dl><div><dt>Empresa</dt><dd>{data.organization.trade_name}</dd></div><div><dt>Código</dt><dd>{data.organization.company_code}</dd></div><div><dt>Matrícula</dt><dd>{data.employee.employee_code}</dd></div></dl><button className="outline" onClick={()=>supabase.auth.signOut().then(()=>location.reload())}><LogOut/>Sair</button></div></section><Nav tab={tab} setTab={setTab}/></main>;
+  return <main className="screen app"><Top data={data}/><section className="content"><p className="greeting">Olá, {data.employee.full_name.split(" ")[0]}</p><h1>Seu dia de trabalho</h1><article className="clock-card"><header><span><CalendarDays/> {new Intl.DateTimeFormat("pt-BR",{weekday:"long",day:"2-digit",month:"short"}).format(new Date())}</span><i>Online</i></header><time>{new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit"}).format(new Date())}</time><p>Próximo registro: <b>{labels[next]}</b></p><div className="methods">{data.methods.filter(m=>m.enabled&&["mobile","qr_code","face"].includes(m.method)).map(m=><button key={m.method} disabled={!!busy||data.entries.length>=4} onClick={()=>record(m.method)}>{m.method==="qr_code"?<QrCode/>:m.method==="face"?<Fingerprint/>:<Smartphone/>}<span>{methodLabels[m.method]}</span>{busy===m.method&&<RefreshCw className="spin"/>}</button>)}</div></article>{message&&<div className={message.includes("registrada")?"notice success":"notice"}>{message}</div>}<article className="card location"><MapPin/><p><b>Localização protegida</b><small>Usada apenas na validação do registro, conforme regras da empresa.</small></p></article><article className="card today"><header><h2>Registros de hoje</h2><span>{data.entries.length}/4</span></header>{["entry","break_start","break_end","exit"].map(type=>{const e=data.entries.find(x=>x.event_type===type);return <div key={type}><span className={e?"done":""}>{e&&<Check/>}</span><p><b>{labels[type]}</b><small>{e?methodLabels[e.method]:"Ainda não registrado"}</small></p><time>{e?clock(e.occurred_at):"—"}</time></div>})}</article></section><Nav tab={tab} setTab={setTab}/></main>
+}
+
+function Top({data}:{data:AppData}){return <header className="top"><Brand/><span className="avatar">{data.employee.full_name.split(" ").slice(0,2).map((x:string)=>x[0]).join("")}</span></header>}
+function Justifications({data,reload,tab,setTab}:{data:AppData;reload:()=>void;tab:string;setTab:(v:"home"|"history"|"justification"|"profile")=>void}){
+  const[kind,setKind]=useState("Atestado médico");const[reason,setReason]=useState("");const[start,setStart]=useState("");const[end,setEnd]=useState("");const[file,setFile]=useState<File|null>(null);const[message,setMessage]=useState("");
+  async function submit(e:FormEvent){e.preventDefault();setMessage("");const{data:{user}}=await supabase.auth.getUser();if(!user)return;let document_path:string|null=null;if(file){document_path=`${data.organization.id}/${data.employee.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;const{error}=await supabase.storage.from("documents").upload(document_path,file);if(error)return setMessage(error.message)}const{error}=await supabase.from("justifications").insert({organization_id:data.organization.id,employee_id:data.employee.id,kind,reason,starts_at:new Date(start).toISOString(),ends_at:new Date(end).toISOString(),document_path,created_by:user.id});if(error)return setMessage(error.message);setMessage("Justificativa enviada ao RH.");setReason("");setFile(null);reload()}
+  return <main className="screen app"><Top data={data}/><section className="content"><h1>Justificativas</h1><form className="card justify-form" onSubmit={submit}><Field label="Tipo"><select value={kind} onChange={e=>setKind(e.target.value)}><option>Atestado médico</option><option>Declaração</option><option>Esquecimento de ponto</option><option>Outro</option></select></Field><Field label="Motivo"><textarea required value={reason} onChange={e=>setReason(e.target.value)}/></Field><Field label="Início"><input required type="datetime-local" value={start} onChange={e=>setStart(e.target.value)}/></Field><Field label="Fim"><input required type="datetime-local" value={end} onChange={e=>setEnd(e.target.value)}/></Field><Field label="Documento"><input type="file" accept="application/pdf,image/jpeg,image/png" onChange={e=>setFile(e.target.files?.[0]??null)}/></Field>{message&&<p className={message.includes("enviada")?"notice success":"notice"}>{message}</p>}<button className="primary"><FileCheck2/>Enviar ao RH</button></form><div className="card requests">{data.justifications.map(j=><div key={j.id}><p><b>{j.kind}</b><small>{new Date(j.starts_at).toLocaleDateString("pt-BR")}</small></p><span className={j.status}>{j.status}</span></div>)}</div></section><Nav tab={tab} setTab={setTab}/></main>
+}
+function Nav({tab,setTab}:{tab:string;setTab:(v:"home"|"history"|"justification"|"profile")=>void}){return <nav className="nav"><button className={tab==="home"?"active":""} onClick={()=>setTab("home")}><Clock3/><span>Ponto</span></button><button className={tab==="history"?"active":""} onClick={()=>setTab("history")}><History/><span>Histórico</span></button><button className={tab==="justification"?"active":""} onClick={()=>setTab("justification")}><FileCheck2/><span>Justificar</span></button><button className={tab==="profile"?"active":""} onClick={()=>setTab("profile")}><UserRound/><span>Perfil</span></button></nav>}
+
+export default function App(){
+  const[data,setData]=useState<AppData|TerminalData|null>(null);const[loading,setLoading]=useState(true);const[error,setError]=useState("");
+  const reload=useCallback(async()=>{
+    setLoading(true);setError("");
+    const{data:{user}}=await supabase.auth.getUser();if(!user){setData(null);setLoading(false);return}
+    const{data:member}=await supabase.from("organization_members").select("role,organization_id,organizations(*)").eq("user_id",user.id).eq("active",true).limit(1).single();
+    if(member?.role==="terminal"){const{data:terminal,error:terminalError}=await supabase.from("terminals").select("*").eq("auth_user_id",user.id).single();if(terminalError||!terminal){setError("Terminal não encontrado ou desativado.");setLoading(false);return}const id=await Device.getId();setData({terminal,organization:member.organizations,deviceUuid:id.identifier});setLoading(false);return}
+    const{data:employee,error:e}=await supabase.from("employees").select("*,organizations(*)").eq("auth_user_id",user.id).single();
+    if(e||!employee){setError("Vínculo de funcionário não encontrado.");setLoading(false);return}
+    const info=await Device.getInfo();const id=await Device.getId();
+    let{data:device}=await supabase.from("authorized_devices").select("*").eq("organization_id",employee.organization_id).eq("device_uuid",id.identifier).maybeSingle();
+    if(!device){const inserted=await supabase.from("authorized_devices").insert({organization_id:employee.organization_id,employee_id:employee.id,device_uuid:id.identifier,device_name:info.model||"Celular Android",platform:info.platform,app_version:"1.0.0"}).select("*").single();device=inserted.data}
+    const[meth,entries,justifications]=await Promise.all([
+      supabase.from("clock_methods").select("*").eq("organization_id",employee.organization_id),
+      supabase.from("time_entries").select("*").eq("employee_id",employee.id).gte("occurred_at",dayStart()).order("occurred_at"),
+      supabase.from("justifications").select("*").eq("employee_id",employee.id).order("created_at",{ascending:false}).limit(20),
+    ]);
+    setData({employee,organization:employee.organizations,methods:meth.data??[],device,entries:entries.data??[],justifications:justifications.data??[]});setLoading(false);
+  },[]);
+  useEffect(()=>{reload()},[reload]);
+  const content=useMemo(()=>{if(loading)return <main className="screen centered"><RefreshCw className="spin"/></main>;if(error)return <main className="screen centered"><ShieldCheck/><h1>Acesso indisponível</h1><p>{error}</p><button className="outline" onClick={()=>supabase.auth.signOut().then(()=>location.reload())}>Sair</button></main>;if(!data)return <Login reload={reload}/>;if("terminal" in data)return <TerminalClock data={data}/>;if(data.employee.must_change_password)return <Password employee={data.employee} reload={reload}/>;if(data.organization.settings?.require_device_authorization&&!data.device?.approved)return <PendingDevice data={data} reload={reload}/>;return <Home data={data} reload={reload}/>},[data,error,loading,reload]);
+  return content;
+}

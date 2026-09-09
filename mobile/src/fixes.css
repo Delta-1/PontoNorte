@@ -1,0 +1,33 @@
+.login > footer { color: #71808d; }
+.location p { flex-direction: column; }
+.nav { grid-template-columns: repeat(4, 1fr); }
+.justify-form { display: grid; gap: 14px; padding: 17px; }
+.justify-form select,
+.justify-form textarea,
+.justify-form input { width: 100%; padding: 12px; border: 1px solid #cad5dc; border-radius: 9px; background: #fbfcfd; color: #173149; }
+.justify-form textarea { min-height: 90px; resize: vertical; }
+.requests { padding: 8px 15px; }
+.requests > div { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #e7ecef; }
+.requests p { display: flex; flex-direction: column; margin: 0; }
+.requests small { margin-top: 3px; color: #71818d; }
+.requests span { padding: 5px 8px; border-radius: 12px; background: #edf1f3; color: #5f6f7a; font-size: 10px; }
+.requests span.approved { background: #e5f5eb; color: #237749; }
+.requests span.rejected { background: #f9e9e7; color: #a4453d; }
+.mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 24px; padding: 4px; border-radius: 11px; background: #edf2f5; }
+.mode-switch button { display: flex; min-height: 42px; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 8px; background: transparent; color: #687986; font-size: 11px; font-weight: 750; }
+.mode-switch button svg { width: 16px; }
+.mode-switch button.active { background: #fff; color: #0d4d77; box-shadow: 0 2px 8px #17314912; }
+.terminal { padding: 24px; background: #f5f7f8; }
+.terminal > header { display: flex; align-items: center; justify-content: space-between; padding-top: max(8px, env(safe-area-inset-top)); }
+.terminal-head { margin: 58px 0 32px; text-align: center; }
+.terminal-head > span { display: grid; width: 58px; height: 58px; margin: auto; place-items: center; border-radius: 15px; background: #e2eef5; color: #155c87; }
+.terminal-head > span svg { width: 25px; }
+.terminal-head p { margin: 17px 0 2px; color: #637684; font-size: 13px; }
+.terminal-head h1 { margin: 0; color: #14344d; font-size: 27px; }
+.terminal-head time { display: block; margin-top: 22px; color: #0b2f4d; font-size: 51px; font-weight: 760; letter-spacing: -.06em; }
+.terminal-head small { color: #28855b; font-weight: 700; }
+.terminal-form { display: grid; gap: 16px; padding: 20px; border: 1px solid #d8e1e6; border-radius: 14px; background: #fff; }
+.terminal-form input { text-align: center; font-size: 18px; letter-spacing: .05em; }
+.terminal-form .primary { margin-top: 3px; }
+.terminal > footer { display: flex; align-items: center; gap: 8px; margin-top: 20px; color: #71818d; font-size: 11px; line-height: 1.45; }
+.terminal > footer svg { width: 18px; flex: none; color: #28885c; }

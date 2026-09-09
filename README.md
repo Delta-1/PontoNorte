@@ -1,43 +1,63 @@
 # PontoNorte
 
-Plataforma de controle de ponto e gestão de jornada da CPUSIS.
+Plataforma multiempresa de controle de ponto e gestão de jornada da CP Ocis.
 
-O projeto reúne duas experiências:
+## Produtos separados
 
-- painel administrativo para RH, gestores e líderes de setor;
-- aplicativo móvel para o colaborador registrar o ponto.
+- **Painel web:** administração da CP Ocis, empresas, RH e líderes.
+- **Aplicativo Android:** instalado pelos funcionários para registrar o ponto.
 
-## Acessos
+O aplicativo não é uma página do painel. O código Android está em `mobile/` e o APK é gerado pelo workflow `.github/workflows/build-android.yml`.
 
-- Painel: `/PontoNorte/`
-- Aplicativo: `/PontoNorte/app-ponto`
+## Acesso
 
-## Recursos demonstrados
+Todos os usuários entram com:
 
-- visão diária da jornada;
-- cadastro e acompanhamento de funcionários;
-- setores com líderes responsáveis;
-- chamada por setor;
-- registro por QR Code, reconhecimento facial ou botão no aplicativo;
-- ocorrências, justificativas e relatórios.
+1. código da empresa;
+2. nome de usuário;
+3. senha.
+
+O RH cria uma senha provisória no cadastro do funcionário. A troca é obrigatória no primeiro acesso.
+
+## Recursos de produção
+
+- isolamento multiempresa por Row Level Security;
+- perfis CP Ocis, proprietário, RH, líder e funcionário;
+- funcionários, setores, líderes, jornadas e dispositivos;
+- chamada diária por setor;
+- confirmação de registros pelo líder sem alterar o ponto original;
+- ponto pelo aplicativo ou QR Code temporário;
+- localização, idempotência e trilha de auditoria;
+- justificativas e documentos;
+- relatórios exportáveis para Excel;
+- aplicativo Android com histórico e perfil.
+
+O método facial permanece bloqueado até a contratação e configuração de um fornecedor de prova de vida. Ele não é simulado.
 
 ## Desenvolvimento
 
-Requer Node.js 22 ou superior.
+Painel:
 
 ```bash
-npm install
-npm run dev
+npm ci
+npm run build:pages
 ```
 
-Para gerar a versão estática usada pelo GitHub Pages:
+Aplicativo:
 
 ```bash
-NEXT_PUBLIC_BASE_PATH=/PontoNorte npm run build:pages
+cd mobile
+npm ci
+npm run android:sync
+cd android
+./gradlew assembleDebug
 ```
 
-## Publicação
+## Infraestrutura
 
-O workflow `.github/workflows/deploy-pages.yml` gera e publica o diretório `out` automaticamente no GitHub Pages a cada atualização da branch `main`.
+- Supabase: projeto independente `PontoNorte`, região `sa-east-1`;
+- GitHub Pages: painel web;
+- GitHub Actions: publicação do painel e geração do APK;
+- pacote Android: `br.com.cpusis.pontonorte`.
 
-> A versão atual é um protótipo navegável. Autenticação real, banco de dados, biometria e registros oficiais ainda dependem da integração com o backend.
+Chaves administrativas do Supabase nunca são incluídas no painel ou no aplicativo. Os clientes utilizam somente a chave publicável e as operações privilegiadas ficam em Edge Functions autenticadas.

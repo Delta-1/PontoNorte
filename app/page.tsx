@@ -1,69 +1,258 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bell, Building2, CalendarCheck, Check, ChevronDown, CircleAlert, ClipboardCheck,
-  Clock3, Download, FileSpreadsheet, Fingerprint, LayoutDashboard, Menu, MoreHorizontal,
-  Plus, QrCode, RadioTower, Search, Settings, ShieldCheck, Smartphone, UserCheck,
-  UserPlus, UsersRound, X
+  Clock3, Download, FileSpreadsheet, Fingerprint, LayoutDashboard, LogOut, Menu,
+  MoreHorizontal, Plus, RadioTower, RefreshCw, Search, Settings, ShieldCheck,
+  Smartphone, UserCheck, UserPlus, UsersRound, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { employeeLoginEmail, supabase } from "@/lib/supabase";
+import QRCode from "qrcode";
 
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+type Page = "Hoje"|"Funcionários"|"Dispositivos"|"Terminais"|"Setores e líderes"|"Chamada"|"Jornadas"|"Conferência"|"Ocorrências"|"Relatórios"|"Métodos de ponto"|"Empresas"|"Configurações";
+type Context = { member:any; employee:any; organization:any };
+const menu:[Page,React.ComponentType<{className?:string}>][] = [
+  ["Hoje",LayoutDashboard],["Funcionários",UsersRound],["Dispositivos",Smartphone],["Terminais",RadioTower],["Setores e líderes",UserCheck],
+  ["Chamada",ClipboardCheck],["Jornadas",Clock3],["Conferência",CalendarCheck],
+  ["Ocorrências",CircleAlert],["Relatórios",FileSpreadsheet],["Métodos de ponto",Fingerprint],
+  ["Empresas",Building2],["Configurações",Settings],
+];
+const labels:Record<string,string> = {
+  platform_admin:"Administrador CP Ocis",company_owner:"Administrador da empresa",
+  hr_admin:"Administrador de RH",hr_agent:"Equipe de RH",manager:"Líder de setor",employee:"Funcionário",
+};
+const eventLabels:Record<string,string> = {entry:"Entrada",break_start:"Início do intervalo",break_end:"Fim do intervalo",exit:"Saída"};
+const methodLabels:Record<string,string> = {mobile:"Botão no aplicativo",qr_code:"QR Code",face:"Reconhecimento facial",fingerprint:"Relógio biométrico"};
+const roleCanManage = (role:string) => ["platform_admin","company_owner","hr_admin","hr_agent"].includes(role);
+const initials = (name:string="") => name.split(" ").filter(Boolean).slice(0,2).map((n)=>n[0]).join("").toUpperCase();
+const dateTime = (value:string) => new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(new Date(value));
+const minutes = (value:number=0) => `${value<0?"−":""}${Math.floor(Math.abs(value)/60)}h ${String(Math.abs(value)%60).padStart(2,"0")}min`;
+const todayStart = () => { const d=new Date(); d.setHours(0,0,0,0); return d.toISOString(); };
+async function sha256(value:string){const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value));return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,"0")).join("")}
 
-type Page="Hoje"|"Funcionários"|"Setores e líderes"|"Chamada"|"Jornadas"|"Ocorrências"|"Relatórios"|"Métodos de ponto"|"Empresas"|"Configurações";
-const menu:[Page,React.ComponentType<{className?:string}>][]=[
- ["Hoje",LayoutDashboard],["Funcionários",UsersRound],["Setores e líderes",UserCheck],
- ["Chamada",ClipboardCheck],["Jornadas",Clock3],["Ocorrências",CircleAlert],
- ["Relatórios",FileSpreadsheet],["Métodos de ponto",Fingerprint],["Empresas",Building2],["Configurações",Settings]
-];
-const staff=[
- {name:"Ana Martins",job:"Analista financeiro",sector:"Financeiro",time:"08:01",status:"Presente",color:"green"},
- {name:"Carlos Mendes",job:"Consultor comercial",sector:"Comercial",time:"08:14",status:"Atraso",color:"amber"},
- {name:"João Silva",job:"Suporte técnico",sector:"Suporte",time:"07:56",status:"Presente",color:"green"},
- {name:"Rafaela Lima",job:"Analista de RH",sector:"Administrativo",time:"—",status:"Atestado",color:"blue"},
- {name:"Pedro Freitas",job:"Técnico de implantação",sector:"Implantação",time:"08:03",status:"Presente",color:"green"},
-];
-const sectors=[
- {name:"Comercial",leader:"Marcos Oliveira",members:12,present:10,absent:1,late:1},
- {name:"Suporte",leader:"João Silva",members:9,present:9,absent:0,late:0},
- {name:"Implantação",leader:"Patrícia Souza",members:8,present:7,absent:1,late:0},
- {name:"Administrativo",leader:"Rafaela Lima",members:6,present:5,absent:1,late:0},
-];
-function initials(name:string){return name.split(" ").slice(0,2).map(n=>n[0]).join("")}
-function Badge({children,color="green"}:{children:React.ReactNode;color?:string}){return <span className={"badge "+color}>{children}</span>}
 function Brand(){return <div className="brand"><span><RadioTower/></span><b>Ponto<em>Norte</em><small>CPUSIS</small></b></div>}
+function Badge({children,color="green"}:{children:React.ReactNode;color?:string}){return <span className={"badge "+color}>{children}</span>}
 function PageHead({title,desc,action}:{title:string;desc:string;action?:React.ReactNode}){return <header className="page-head"><div><h1>{title}</h1><p>{desc}</p></div>{action}</header>}
+function ErrorBox({message}:{message:string}){return message?<div className="form-error">{message}</div>:null}
 
-function Dashboard(){
- return <><PageHead title="Hoje" desc="Terça-feira, 8 de setembro" action={<Button><Download/>Exportar dia</Button>}/>
- <section className="metrics">
-  {[["48","Funcionários ativos","3 afastados"],["43","Presentes agora","89,6% da equipe"],["3","Atrasos hoje","Média de 11 min"],["1","Falta sem justificativa","Aguardando análise"]].map((m,i)=><article key={m[1]}><span className={"metric-mark m"+i}/><div><b>{m[0]}</b><p>{m[1]}</p><small>{m[2]}</small></div></article>)}
- </section>
- <section className="dash-grid">
-  <article className="surface"><header className="section-head"><div><h2>Movimentação de hoje</h2><p>Últimos registros recebidos</p></div><Button variant="ghost">Ver todos</Button></header><div className="activity-list">{staff.map(p=><div key={p.name}><span className="avatar">{initials(p.name)}</span><p><b>{p.name}</b><small>{p.job}</small></p><span className="sector">{p.sector}</span><time>{p.time}</time><Badge color={p.color}>{p.status}</Badge></div>)}</div></article>
-  <article className="surface"><header className="section-head"><div><h2>Setores</h2><p>Presença por equipe</p></div><Button variant="ghost">Gerenciar</Button></header><div className="sector-list">{sectors.map(s=><div key={s.name}><header><p><b>{s.name}</b><small>{s.leader}</small></p><strong>{s.present}/{s.members}</strong></header><div className="track"><i style={{width:(s.present/s.members*100)+"%"}}/></div><footer><span>{s.present} presentes</span>{s.late>0&&<span className="warn">{s.late} atraso</span>}{s.absent>0&&<span className="danger">{s.absent} falta</span>}</footer></div>)}</div></article>
- </section></>
+function Login({onLogin}:{onLogin:()=>void}){
+  const [company,setCompany]=useState("CPUSIS");
+  const [username,setUsername]=useState("victor");
+  const [password,setPassword]=useState("");
+  const [error,setError]=useState(""); const [loading,setLoading]=useState(false);
+  async function submit(e:FormEvent){
+    e.preventDefault(); setLoading(true); setError("");
+    const {error} = await supabase.auth.signInWithPassword({email:employeeLoginEmail(company,username),password});
+    setLoading(false);
+    if(error) setError("Código da empresa, usuário ou senha incorretos."); else onLogin();
+  }
+  return <main className="auth-stage"><section className="auth-card"><Brand/><div className="auth-copy"><span><ShieldCheck/></span><h1>Acesse o PontoNorte</h1><p>Entre com os dados cadastrados pela sua empresa.</p></div><form onSubmit={submit}><label>Código da empresa<Input value={company} onChange={e=>setCompany(e.target.value.toUpperCase())} autoCapitalize="characters"/></label><label>Usuário<Input value={username} onChange={e=>setUsername(e.target.value.toLowerCase())} autoCapitalize="none"/></label><label>Senha<Input value={password} onChange={e=>setPassword(e.target.value)} type="password"/></label><ErrorBox message={error}/><Button disabled={loading}>{loading?<RefreshCw className="spin"/>:"Entrar"}</Button></form><small>Ambiente de produção · Dados protegidos por empresa</small></section></main>
 }
 
-function Employees(){const[q,setQ]=useState("");return <><PageHead title="Funcionários" desc="Cadastros, vínculos e situação atual" action={<Button><UserPlus/>Adicionar funcionário</Button>}/><section className="surface table-surface"><div className="table-tools"><label><Search/><Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar por nome, cargo ou setor"/></label><Button variant="outline"><Download/>Exportar</Button></div><Table><TableHeader><TableRow><TableHead>Funcionário</TableHead><TableHead>Setor</TableHead><TableHead>Jornada</TableHead><TableHead>Entrada hoje</TableHead><TableHead>Situação</TableHead><TableHead/></TableRow></TableHeader><TableBody>{staff.filter(p=>(p.name+p.job+p.sector).toLowerCase().includes(q.toLowerCase())).map(p=><TableRow key={p.name}><TableCell><div className="person-cell"><span className="avatar">{initials(p.name)}</span><p><b>{p.name}</b><small>{p.job}</small></p></div></TableCell><TableCell>{p.sector}</TableCell><TableCell>08:00–18:00</TableCell><TableCell>{p.time}</TableCell><TableCell><Badge color={p.color}>{p.status}</Badge></TableCell><TableCell><MoreHorizontal/></TableCell></TableRow>)}</TableBody></Table></section></>}
+function ChangePassword({employee,onDone}:{employee:any;onDone:()=>void}){
+  const [password,setPassword]=useState(""); const [confirm,setConfirm]=useState(""); const [error,setError]=useState("");
+  async function submit(e:FormEvent){
+    e.preventDefault(); setError("");
+    if(password.length<8) return setError("Use pelo menos 8 caracteres.");
+    if(password!==confirm) return setError("As senhas não coincidem.");
+    const {error:authError}=await supabase.auth.updateUser({password});
+    if(authError) return setError(authError.message);
+    const {error:updateError}=await supabase.functions.invoke("complete-first-access");
+    if(updateError) return setError(updateError.message);
+    onDone();
+  }
+  return <main className="auth-stage"><section className="auth-card"><Brand/><div className="auth-copy"><span><ShieldCheck/></span><h1>Crie sua nova senha</h1><p>A senha provisória só pode ser usada no primeiro acesso.</p></div><form onSubmit={submit}><label>Nova senha<Input type="password" value={password} onChange={e=>setPassword(e.target.value)}/></label><label>Confirmar senha<Input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)}/></label><ErrorBox message={error}/><Button>Salvar nova senha</Button></form></section></main>
+}
 
-function Sectors(){return <><PageHead title="Setores e líderes" desc="Organize as equipes e defina o que cada líder pode acompanhar" action={<Dialog><DialogTrigger asChild><Button><Plus/>Criar setor</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Novo setor</DialogTitle><DialogDescription>Defina o nome e escolha o líder responsável.</DialogDescription></DialogHeader><label className="field">Nome do setor<Input placeholder="Ex.: Estoque"/></label><label className="field">Líder<Input placeholder="Buscar funcionário"/></label><DialogFooter><Button>Criar setor</Button></DialogFooter></DialogContent></Dialog>}/><section className="sector-cards">{sectors.map(s=><article className="surface" key={s.name}><header><span className="sector-icon"><UsersRound/></span><button><MoreHorizontal/></button></header><h2>{s.name}</h2><div className="leader"><span className="avatar">{initials(s.leader)}</span><p><small>Líder do setor</small><b>{s.leader}</b></p></div><dl><div><dt>Funcionários</dt><dd>{s.members}</dd></div><div><dt>Presentes</dt><dd>{s.present}</dd></div><div><dt>Pendências</dt><dd>{s.absent+s.late}</dd></div></dl><Button variant="outline">Abrir equipe</Button></article>)}</section><section className="permission-note"><ShieldCheck/><div><b>Permissões do líder</b><p>O líder visualiza somente os funcionários do próprio setor. Ele pode realizar chamada, conferir faltas e enviar observações ao RH, mas não altera jornadas, salários ou dados de outros setores.</p></div><Button variant="outline">Configurar permissões</Button></section></>}
+function Dashboard({ctx}:{ctx:Context}){
+  const [stats,setStats]=useState({employees:0,entries:0,pending:0,departments:0});
+  useEffect(()=>{(async()=>{
+    const org=ctx.organization.id;
+    const [employees,entries,pending,departments]=await Promise.all([
+      supabase.from("employees").select("*",{count:"exact",head:true}).eq("organization_id",org).eq("status","active"),
+      supabase.from("time_entries").select("*",{count:"exact",head:true}).eq("organization_id",org).gte("occurred_at",todayStart()),
+      supabase.from("justifications").select("*",{count:"exact",head:true}).eq("organization_id",org).eq("status","pending"),
+      supabase.from("departments").select("*",{count:"exact",head:true}).eq("organization_id",org).eq("active",true),
+    ]);
+    setStats({employees:employees.count??0,entries:entries.count??0,pending:pending.count??0,departments:departments.count??0});
+  })()},[ctx.organization.id]);
+  return <><PageHead title="Hoje" desc={new Intl.DateTimeFormat("pt-BR",{dateStyle:"full"}).format(new Date())}/><section className="metrics">
+    {[[""+stats.employees,"Funcionários ativos","Equipe cadastrada"],[""+stats.entries,"Registros hoje","Recebidos pelo aplicativo"],[""+stats.pending,"Pendências","Aguardando análise"],[""+stats.departments,"Setores ativos","Estrutura da empresa"]].map((m,i)=><article key={m[1]}><span className={"metric-mark m"+i}/><div><b>{m[0]}</b><p>{m[1]}</p><small>{m[2]}</small></div></article>)}
+  </section><section className="permission-note"><ShieldCheck/><div><b>Operação em produção</b><p>Os dados exibidos pertencem a {ctx.organization.trade_name}. Seu acesso é limitado ao perfil {labels[ctx.member.role]}.</p></div></section></>
+}
 
-function RollCall(){const[marks,setMarks]=useState<Record<string,string>>({"Ana Martins":"Presente","Carlos Mendes":"Atraso"});const team=staff.slice(0,4);return <><PageHead title="Chamada do setor" desc="Comercial · Responsável: Marcos Oliveira" action={<Button><Check/>Concluir chamada</Button>}/><section className="call-layout"><article className="surface"><header className="call-head"><div><b>Chamada da manhã</b><p>Iniciada às 08:10 · 4 funcionários</p></div><Badge color="amber">Em andamento</Badge></header><div className="call-list">{team.map(p=><div key={p.name}><span className="avatar">{initials(p.name)}</span><p><b>{p.name}</b><small>{p.job}</small></p><div className="mark-options">{["Presente","Atraso","Ausente"].map(m=><button key={m} className={marks[p.name]===m?m.toLowerCase():""} onClick={()=>setMarks(x=>({...x,[p.name]:m}))}>{m}</button>)}</div></div>)}</div></article><aside className="surface call-summary"><h2>Resumo da chamada</h2><div><span><b>{Object.values(marks).filter(x=>x==="Presente").length}</b> presentes</span><span><b>{Object.values(marks).filter(x=>x==="Atraso").length}</b> atrasos</span><span><b>{Object.values(marks).filter(x=>x==="Ausente").length}</b> ausentes</span><span><b>{team.length-Object.keys(marks).length}</b> não marcados</span></div><label>Observação do líder<textarea placeholder="Escreva uma observação para o RH..."/></label></aside></section></>}
+function Employees({ctx}:{ctx:Context}){
+  const [rows,setRows]=useState<any[]>([]); const [departments,setDepartments]=useState<any[]>([]); const [schedules,setSchedules]=useState<any[]>([]);
+  const [q,setQ]=useState(""); const [open,setOpen]=useState(false); const [error,setError]=useState(""); const [loading,setLoading]=useState(false);
+  const blank={full_name:"",username:"",employee_code:"",cpf:"",birth_date:"",gender:"",hired_at:"",job_title:"",email:"",phone:"",department_id:"",schedule_id:"",role:"employee",password:"",pin:""};
+  const [form,setForm]=useState(blank);
+  const load=useCallback(async()=>{
+    const org=ctx.organization.id;
+    const [e,d,s]=await Promise.all([
+      supabase.from("employees").select("*,departments(name),work_schedules(name,start_time,end_time)").eq("organization_id",org).order("full_name"),
+      supabase.from("departments").select("*").eq("organization_id",org).eq("active",true).order("name"),
+      supabase.from("work_schedules").select("*").eq("organization_id",org).eq("active",true).order("name"),
+    ]); setRows(e.data??[]);setDepartments(d.data??[]);setSchedules(s.data??[]);
+  },[ctx.organization.id]);
+  useEffect(()=>{load()},[load]);
+  async function create(e:FormEvent){
+    e.preventDefault();setLoading(true);setError("");
+    const {error}=await supabase.functions.invoke("manage-user",{body:{...form,organization_id:ctx.organization.id,department_id:form.department_id||null,schedule_id:form.schedule_id||null}});
+    setLoading(false);if(error)return setError(error.message);
+    setOpen(false);setForm(blank);load();
+  }
+  const filtered=rows.filter(r=>(r.full_name+r.username+(r.job_title??"")+(r.departments?.name??"")).toLowerCase().includes(q.toLowerCase()));
+  return <><PageHead title="Funcionários" desc="Ficha cadastral, acesso e vínculo de jornada" action={roleCanManage(ctx.member.role)?<Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button><UserPlus/>Adicionar funcionário</Button></DialogTrigger><DialogContent className="wide-dialog"><DialogHeader><DialogTitle>Novo funcionário</DialogTitle><DialogDescription>Cadastre a ficha. A senha muda no primeiro acesso e o PIN identifica o colaborador no terminal da empresa.</DialogDescription></DialogHeader><form className="form-grid" onSubmit={create}><label>Nome completo<Input required value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/></label><label>CPF<Input required inputMode="numeric" maxLength={14} value={form.cpf} onChange={e=>setForm({...form,cpf:e.target.value})}/></label><label>Matrícula<Input required value={form.employee_code} onChange={e=>setForm({...form,employee_code:e.target.value})}/></label><label>Usuário<Input required value={form.username} onChange={e=>setForm({...form,username:e.target.value.toLowerCase()})}/></label><label>Data de nascimento<Input type="date" value={form.birth_date} onChange={e=>setForm({...form,birth_date:e.target.value})}/></label><label>Admissão<Input type="date" value={form.hired_at} onChange={e=>setForm({...form,hired_at:e.target.value})}/></label><label>Gênero<select value={form.gender} onChange={e=>setForm({...form,gender:e.target.value})}><option value="">Não informado</option><option value="female">Feminino</option><option value="male">Masculino</option><option value="other">Outro</option><option value="not_disclosed">Prefere não informar</option></select></label><label>Cargo<Input value={form.job_title} onChange={e=>setForm({...form,job_title:e.target.value})}/></label><label>E-mail pessoal<Input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label><label>Telefone<Input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></label><label>Setor<select value={form.department_id} onChange={e=>setForm({...form,department_id:e.target.value})}><option value="">Sem setor</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label>Jornada<select value={form.schedule_id} onChange={e=>setForm({...form,schedule_id:e.target.value})}><option value="">Sem jornada</option>{schedules.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><label>Perfil<select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}><option value="employee">Funcionário</option><option value="manager">Líder de setor</option><option value="hr_agent">Equipe de RH</option><option value="hr_admin">Administrador de RH</option></select></label><label>PIN do terminal (6 números)<Input required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} type="password" value={form.pin} onChange={e=>setForm({...form,pin:e.target.value.replace(/\D/g,"")})}/></label><label>Senha provisória<Input required minLength={8} type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label><ErrorBox message={error}/><DialogFooter><Button disabled={loading}>{loading?"Criando…":"Criar acesso"}</Button></DialogFooter></form></DialogContent></Dialog>:undefined}/><section className="surface table-surface"><div className="table-tools"><label><Search/><Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar funcionário"/></label><Button variant="outline" onClick={load}><RefreshCw/>Atualizar</Button></div><Table><TableHeader><TableRow><TableHead>Funcionário</TableHead><TableHead>Matrícula / CPF</TableHead><TableHead>Setor</TableHead><TableHead>Jornada</TableHead><TableHead>Situação</TableHead></TableRow></TableHeader><TableBody>{filtered.map(r=><TableRow key={r.id}><TableCell><div className="person-cell"><span className="avatar">{initials(r.full_name)}</span><p><b>{r.full_name}</b><small>{r.username} · {r.job_title||"Sem cargo"}</small></p></div></TableCell><TableCell>{r.employee_code}<br/><small>{r.cpf||"CPF não informado"}</small></TableCell><TableCell>{r.departments?.name||"—"}</TableCell><TableCell>{r.work_schedules?.name||"—"}</TableCell><TableCell><Badge color={r.status==="active"?"green":"gray"}>{r.status==="active"?"Ativo":r.status}</Badge></TableCell></TableRow>)}</TableBody></Table></section></>
+}
 
-function Methods(){const[enabled,setEnabled]=useState([true,true,true,false]);const data=[[QrCode,"QR Code","O funcionário escaneia o código exibido pela empresa."],[Fingerprint,"Reconhecimento facial","Validação de rosto e prova de vida pelo aplicativo."],[Smartphone,"Botão no aplicativo","Registro direto no celular autorizado."],[Clock3,"Relógio físico","Integração com equipamento biométrico homologado."]] as const;return <><PageHead title="Métodos de ponto" desc="Escolha quais opções estarão disponíveis no aplicativo dos funcionários"/><section className="methods">{data.map(([I,title,desc],i)=><article className="surface" key={title}><header><span><I/></span><Switch checked={enabled[i]} onCheckedChange={v=>setEnabled(a=>a.map((x,j)=>j===i?v:x))}/></header><h2>{title}</h2><p>{desc}</p><footer><Badge color={enabled[i]?"green":"gray"}>{enabled[i]?"Disponível no app":"Desativado"}</Badge><Button variant="ghost">Configurar</Button></footer></article>)}</section><section className="app-banner"><div><Smartphone/><span><b>Aplicativo PontoNorte</b><p>O registro de ponto do funcionário é feito somente pelo aplicativo móvel. O painel web fica reservado para gestão, conferência e relatórios.</p></span></div><a href={`${basePath}/app-ponto`}><Button>Visualizar aplicativo</Button></a></section></>}
+function Departments({ctx}:{ctx:Context}){
+  const [rows,setRows]=useState<any[]>([]);const [name,setName]=useState("");
+  const load=useCallback(async()=>{const {data}=await supabase.from("departments").select("*,employees(count)").eq("organization_id",ctx.organization.id).order("name");setRows(data??[])},[ctx.organization.id]);
+  useEffect(()=>{load()},[load]);
+  async function add(e:FormEvent){e.preventDefault();await supabase.from("departments").insert({organization_id:ctx.organization.id,name});setName("");load()}
+  return <><PageHead title="Setores e líderes" desc="O líder acessa e confirma somente os pontos do próprio setor" action={roleCanManage(ctx.member.role)?<form className="inline-create" onSubmit={add}><Input required value={name} onChange={e=>setName(e.target.value)} placeholder="Nome do novo setor"/><Button><Plus/>Criar</Button></form>:undefined}/><section className="sector-cards">{rows.map(r=><article className="surface" key={r.id}><header><span className="sector-icon"><UsersRound/></span><Badge color={r.active?"green":"gray"}>{r.active?"Ativo":"Inativo"}</Badge></header><h2>{r.name}</h2><p className="muted-text">{r.description||"Equipe organizada por setor."}</p><dl><div><dt>Funcionários</dt><dd>{r.employees?.[0]?.count??0}</dd></div></dl></article>)}</section></>
+}
 
-function Generic({page}:{page:Page}){const map:Record<string,[string,string]>={
- "Jornadas":["Jornadas de trabalho","Horários, intervalos, tolerâncias e banco de horas"],
- "Ocorrências":["Ocorrências","Faltas, atrasos, ajustes e justificativas"],
- "Relatórios":["Relatórios","Espelho de ponto, banco de horas e fechamento mensal"],
- "Empresas":["Empresas clientes","Controle das contas atendidas pela CPUSIS"],
- "Configurações":["Configurações","Dados da empresa, regras gerais e permissões"]
-};const[t,d]=map[page];return <><PageHead title={t} desc={d} action={<Button><Plus/>Novo registro</Button>}/><section className="surface empty-state"><CalendarCheck/><h2>{t}</h2><p>Use os filtros e as ações acima para administrar este módulo.</p><Button variant="outline">Ver registros</Button></section></>}
+function Devices({ctx}:{ctx:Context}){
+  const[rows,setRows]=useState<any[]>([]);
+  const load=useCallback(async()=>{const{data}=await supabase.from("authorized_devices").select("*,employees(full_name,department_id)").eq("organization_id",ctx.organization.id).order("created_at",{ascending:false});setRows(data??[])},[ctx.organization.id]);
+  useEffect(()=>{load()},[load]);
+  async function setApproval(row:any,approved:boolean){const{data:{user}}=await supabase.auth.getUser();await supabase.from("authorized_devices").update({approved,approved_by:approved?user?.id:null,approved_at:approved?new Date().toISOString():null,revoked_at:approved?null:new Date().toISOString()}).eq("id",row.id);load()}
+  return <><PageHead title="Dispositivos" desc="Autorize os celulares vinculados aos funcionários"/><section className="surface table-surface"><Table><TableHeader><TableRow><TableHead>Funcionário</TableHead><TableHead>Aparelho</TableHead><TableHead>Plataforma</TableHead><TableHead>Último acesso</TableHead><TableHead>Status</TableHead><TableHead>Ações</TableHead></TableRow></TableHeader><TableBody>{rows.map(r=><TableRow key={r.id}><TableCell>{r.employees?.full_name}</TableCell><TableCell><b>{r.device_name||"Celular"}</b><br/><small>{r.device_uuid}</small></TableCell><TableCell>{r.platform||"android"}</TableCell><TableCell>{r.last_seen_at?dateTime(r.last_seen_at):"Primeiro acesso"}</TableCell><TableCell><Badge color={r.approved&&!r.revoked_at?"green":"amber"}>{r.approved&&!r.revoked_at?"Autorizado":"Pendente"}</Badge></TableCell><TableCell><Button size="sm" variant="outline" onClick={()=>setApproval(r,!(r.approved&&!r.revoked_at))}>{r.approved&&!r.revoked_at?"Revogar":"Autorizar"}</Button></TableCell></TableRow>)}</TableBody></Table></section></>
+}
 
-export default function Home(){const[page,setPage]=useState<Page>("Hoje");const[drawer,setDrawer]=useState(false);return <main className="admin-shell"><aside className={"side "+(drawer?"open":"")}><header><Brand/><button onClick={()=>setDrawer(false)}><X/></button></header><button className="company-switch"><span>CP</span><p><b>CPUSIS</b><small>Conta demonstração</small></p><ChevronDown/></button><nav>{menu.map(([name,I])=><button className={page===name?"active":""} key={name} onClick={()=>{setPage(name);setDrawer(false)}}><I/><span>{name}</span>{name==="Ocorrências"&&<b>2</b>}</button>)}</nav><footer><span className="avatar">VS</span><p><b>Victor Souza</b><small>Administrador</small></p><MoreHorizontal/></footer></aside>{drawer&&<button className="scrim" onClick={()=>setDrawer(false)}/>}<section className="admin-main"><header className="appbar"><div><button className="menu-button" onClick={()=>setDrawer(true)}><Menu/></button><span><b>CPUSIS</b><small>Gestão de ponto</small></span></div><aside><a href={`${basePath}/app-ponto`}><Button variant="outline"><Smartphone/>Abrir aplicativo</Button></a><button className="notify"><Bell/><i/></button></aside></header><div className="admin-content">{page==="Hoje"&&<Dashboard/>}{page==="Funcionários"&&<Employees/>}{page==="Setores e líderes"&&<Sectors/>}{page==="Chamada"&&<RollCall/>}{page==="Métodos de ponto"&&<Methods/>}{!["Hoje","Funcionários","Setores e líderes","Chamada","Métodos de ponto"].includes(page)&&<Generic page={page}/>}</div></section></main>}
+function Terminals({ctx}:{ctx:Context}){
+  const[rows,setRows]=useState<any[]>([]);const[open,setOpen]=useState(false);const[error,setError]=useState("");const[saved,setSaved]=useState("");
+  const[form,setForm]=useState({name:"Recepção",code:"recepcao",password:"",location_name:"",radius_meters:150});
+  const load=useCallback(async()=>{const{data}=await supabase.from("terminals").select("*").eq("organization_id",ctx.organization.id).order("created_at",{ascending:false});setRows(data??[])},[ctx.organization.id]);
+  useEffect(()=>{load()},[load]);
+  async function create(e:FormEvent){e.preventDefault();setError("");const{data,error}=await supabase.functions.invoke("provision-terminal",{body:{...form,organization_id:ctx.organization.id}});if(error)return setError(error.message);setSaved(`${data.company_code} / ${data.terminal.code}`);setOpen(false);setForm({...form,password:""});load()}
+  async function toggle(r:any){await supabase.from("terminals").update({enabled:!r.enabled}).eq("id",r.id);load()}
+  return <><PageHead title="Terminais da empresa" desc="APK fixo para recepção, portaria ou tablet compartilhado" action={["platform_admin","company_owner","hr_admin"].includes(ctx.member.role)?<Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button><Plus/>Novo terminal</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Criar terminal corporativo</DialogTitle><DialogDescription>Instale o mesmo APK no aparelho da empresa e entre com estas credenciais.</DialogDescription></DialogHeader><form className="form-grid" onSubmit={create}><label>Nome do aparelho<Input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><label>Código do terminal<Input required minLength={3} value={form.code} onChange={e=>setForm({...form,code:e.target.value.toLowerCase()})}/></label><label>Local<Input value={form.location_name} onChange={e=>setForm({...form,location_name:e.target.value})}/></label><label>Raio permitido (metros)<Input type="number" min={20} max={5000} value={form.radius_meters} onChange={e=>setForm({...form,radius_meters:+e.target.value})}/></label><label className="full-row">Senha do terminal<Input required minLength={10} type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label><ErrorBox message={error}/><DialogFooter><Button>Criar terminal</Button></DialogFooter></form></DialogContent></Dialog>:undefined}/>{saved&&<div className="success-banner"><Check/>Terminal criado. Login no APK: <b>{saved}</b></div>}<section className="surface table-surface"><Table><TableHeader><TableRow><TableHead>Terminal</TableHead><TableHead>Código</TableHead><TableHead>Local</TableHead><TableHead>Aparelho vinculado</TableHead><TableHead>Status</TableHead><TableHead>Ação</TableHead></TableRow></TableHeader><TableBody>{rows.map(r=><TableRow key={r.id}><TableCell><b>{r.name}</b></TableCell><TableCell>{r.code}</TableCell><TableCell>{r.location_name||"Sem restrição"}</TableCell><TableCell>{r.device_uuid||"Vincula no primeiro acesso"}</TableCell><TableCell><Badge color={r.enabled?"green":"gray"}>{r.enabled?"Ativo":"Desativado"}</Badge></TableCell><TableCell><Button size="sm" variant="outline" onClick={()=>toggle(r)}>{r.enabled?"Desativar":"Ativar"}</Button></TableCell></TableRow>)}</TableBody></Table></section></>
+}
+
+function Schedules({ctx}:{ctx:Context}){
+  const [rows,setRows]=useState<any[]>([]);const [form,setForm]=useState({name:"",schedule_type:"flexible",weekly_hours:44,daily_hours:8,start_time:"08:00",break_start:"12:00",break_end:"13:00",end_time:"17:00",tolerance_minutes:10});
+  const load=useCallback(async()=>{const{data}=await supabase.from("work_schedules").select("*").eq("organization_id",ctx.organization.id).order("name");setRows(data??[])},[ctx.organization.id]);
+  useEffect(()=>{load()},[load]);
+  async function add(e:FormEvent){e.preventDefault();const fixed=form.schedule_type==="fixed";await supabase.from("work_schedules").insert({organization_id:ctx.organization.id,name:form.name,schedule_type:form.schedule_type,weekly_minutes:Math.round(form.weekly_hours*60),daily_minutes:Math.round(form.daily_hours*60),start_time:fixed?form.start_time:null,break_start:fixed?form.break_start:null,break_end:fixed?form.break_end:null,end_time:fixed?form.end_time:null,tolerance_minutes:form.tolerance_minutes});setForm({...form,name:""});load()}
+  return <><PageHead title="Jornadas" desc="Carga contratual fixa ou flexível, com saldo automático"/>{roleCanManage(ctx.member.role)&&<form className="surface schedule-form" onSubmit={add}><label>Nome<Input required placeholder="Ex.: Flexível 44h" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><label>Modelo<select value={form.schedule_type} onChange={e=>setForm({...form,schedule_type:e.target.value})}><option value="flexible">Flexível</option><option value="fixed">Horário fixo</option></select></label><label>Horas semanais<Input type="number" min={1} max={168} step={0.5} value={form.weekly_hours} onChange={e=>setForm({...form,weekly_hours:+e.target.value})}/></label><label>Meta diária<Input type="number" min={1} max={24} step={0.5} value={form.daily_hours} onChange={e=>setForm({...form,daily_hours:+e.target.value})}/></label>{form.schedule_type==="fixed"&&<><label>Entrada<Input type="time" value={form.start_time} onChange={e=>setForm({...form,start_time:e.target.value})}/></label><label>Intervalo início<Input type="time" value={form.break_start} onChange={e=>setForm({...form,break_start:e.target.value})}/></label><label>Intervalo fim<Input type="time" value={form.break_end} onChange={e=>setForm({...form,break_end:e.target.value})}/></label><label>Saída<Input type="time" value={form.end_time} onChange={e=>setForm({...form,end_time:e.target.value})}/></label></>}<label>Tolerância (min)<Input type="number" min={0} max={180} value={form.tolerance_minutes} onChange={e=>setForm({...form,tolerance_minutes:+e.target.value})}/></label><Button><Plus/>Adicionar jornada</Button></form>}<section className="surface table-surface"><Table><TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Modelo</TableHead><TableHead>Carga semanal</TableHead><TableHead>Meta diária</TableHead><TableHead>Horário</TableHead></TableRow></TableHeader><TableBody>{rows.map(r=><TableRow key={r.id}><TableCell><b>{r.name}</b></TableCell><TableCell><Badge color={r.schedule_type==="flexible"?"green":"blue"}>{r.schedule_type==="flexible"?"Flexível":"Fixo"}</Badge></TableCell><TableCell>{minutes(r.weekly_minutes)}</TableCell><TableCell>{minutes(r.daily_minutes)}</TableCell><TableCell>{r.schedule_type==="flexible"?"Entrada e saída livres":`${r.start_time?.slice(0,5)}–${r.end_time?.slice(0,5)}`}</TableCell></TableRow>)}</TableBody></Table></section></>
+}
+
+function ReviewEntries({ctx}:{ctx:Context}){
+  const [rows,setRows]=useState<any[]>([]);
+  const load=useCallback(async()=>{const{data}=await supabase.from("time_entries").select("*,employees(full_name,job_title,department_id),time_entry_reviews(*)").eq("organization_id",ctx.organization.id).gte("occurred_at",todayStart()).order("occurred_at",{ascending:false});setRows(data??[])},[ctx.organization.id]);
+  useEffect(()=>{load()},[load]);
+  async function review(row:any,status:string){
+    const {data:{user}}=await supabase.auth.getUser();if(!user)return;
+    await supabase.from("time_entry_reviews").upsert({organization_id:row.organization_id,time_entry_id:row.id,employee_id:row.employee_id,reviewer_user_id:user.id,status},{onConflict:"time_entry_id,reviewer_user_id"});load();
+  }
+  return <><PageHead title="Conferência de pontos" desc="Líderes confirmam os registros do próprio setor sem alterar a marcação original"/><section className="surface table-surface"><Table><TableHeader><TableRow><TableHead>Funcionário</TableHead><TableHead>Registro</TableHead><TableHead>Método</TableHead><TableHead>Conferência</TableHead><TableHead>Ações</TableHead></TableRow></TableHeader><TableBody>{rows.map(r=>{const own=r.time_entry_reviews?.find((x:any)=>x.reviewer_user_id===ctx.member.user_id);return <TableRow key={r.id}><TableCell>{r.employees?.full_name}</TableCell><TableCell>{eventLabels[r.event_type]} · {dateTime(r.occurred_at)}</TableCell><TableCell>{methodLabels[r.method]??r.method}</TableCell><TableCell><Badge color={own?.status==="confirmed"?"green":own?"amber":"gray"}>{own?.status==="confirmed"?"Confirmado":own?"Divergência":"Pendente"}</Badge></TableCell><TableCell><div className="row-actions"><Button size="sm" variant="outline" onClick={()=>review(r,"confirmed")}><Check/>Confirmar</Button><Button size="sm" variant="outline" onClick={()=>review(r,"forwarded_to_hr")}><CircleAlert/>Enviar ao RH</Button></div></TableCell></TableRow>})}</TableBody></Table></section></>
+}
+
+function RollCall({ctx}:{ctx:Context}){
+  const [employees,setEmployees]=useState<any[]>([]);const [marks,setMarks]=useState<Record<string,string>>({});const [note,setNote]=useState("");const [saved,setSaved]=useState(false);
+  const departmentId=ctx.member.department_id;
+  useEffect(()=>{if(!departmentId)return;supabase.from("employees").select("*").eq("organization_id",ctx.organization.id).eq("department_id",departmentId).eq("status","active").order("full_name").then(({data})=>setEmployees(data??[]))},[ctx.organization.id,departmentId]);
+  async function finish(){
+    if(!departmentId)return;
+    const {data:{user}}=await supabase.auth.getUser();if(!user)return;
+    const date=new Date().toISOString().slice(0,10);
+    const {data:call,error}=await supabase.from("attendance_calls").upsert({organization_id:ctx.organization.id,department_id:departmentId,call_date:date,period:"daily",status:"completed",notes:note,created_by:user.id,completed_at:new Date().toISOString()},{onConflict:"department_id,call_date,period"}).select("id").single();
+    if(error||!call)return;
+    await supabase.from("attendance_call_items").upsert(employees.map(e=>({call_id:call.id,organization_id:ctx.organization.id,employee_id:e.id,mark:marks[e.id]||"absent",marked_at:new Date().toISOString()})),{onConflict:"call_id,employee_id"});
+    setSaved(true);
+  }
+  if(!departmentId&&ctx.member.role==="manager")return <section className="surface empty-state"><CircleAlert/><h2>Líder sem setor</h2><p>O RH precisa vincular este líder a um setor.</p></section>;
+  return <><PageHead title="Chamada do setor" desc="Marque a presença e conclua a chamada" action={<Button onClick={finish}><Check/>Concluir chamada</Button>}/>{saved&&<div className="success-banner"><Check/>Chamada salva e enviada ao RH.</div>}<section className="call-layout"><article className="surface"><div className="call-list">{employees.map(p=><div key={p.id}><span className="avatar">{initials(p.full_name)}</span><p><b>{p.full_name}</b><small>{p.job_title||"Funcionário"}</small></p><div className="mark-options">{[["present","Presente"],["late","Atraso"],["absent","Ausente"],["excused","Justificado"]].map(([v,l])=><button key={v} className={marks[p.id]===v?v:""} onClick={()=>setMarks({...marks,[p.id]:v})}>{l}</button>)}</div></div>)}</div></article><aside className="surface call-summary"><h2>Resumo</h2><div><span><b>{Object.values(marks).filter(v=>v==="present").length}</b> presentes</span><span><b>{Object.values(marks).filter(v=>v==="late").length}</b> atrasos</span><span><b>{Object.values(marks).filter(v=>v==="absent").length}</b> ausentes</span><span><b>{employees.length-Object.keys(marks).length}</b> não marcados</span></div><label>Observação<textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Observação para o RH"/></label></aside></section></>
+}
+
+function Occurrences({ctx}:{ctx:Context}){
+  const [rows,setRows]=useState<any[]>([]);
+  const load=useCallback(async()=>{const{data}=await supabase.from("justifications").select("*,employees(full_name)").eq("organization_id",ctx.organization.id).order("created_at",{ascending:false});setRows(data??[])},[ctx.organization.id]);
+  useEffect(()=>{load()},[load]);
+  async function decide(id:string,status:string){const{data:{user}}=await supabase.auth.getUser();await supabase.from("justifications").update({status,reviewed_by:user?.id,reviewed_at:new Date().toISOString()}).eq("id",id);load()}
+  return <><PageHead title="Ocorrências e justificativas" desc="Atestados, faltas e análises do RH"/><section className="surface table-surface"><Table><TableHeader><TableRow><TableHead>Funcionário</TableHead><TableHead>Tipo</TableHead><TableHead>Período</TableHead><TableHead>Status</TableHead><TableHead>Ações</TableHead></TableRow></TableHeader><TableBody>{rows.map(r=><TableRow key={r.id}><TableCell>{r.employees?.full_name}</TableCell><TableCell>{r.kind}</TableCell><TableCell>{dateTime(r.starts_at)} a {dateTime(r.ends_at)}</TableCell><TableCell><Badge color={r.status==="approved"?"green":r.status==="rejected"?"amber":"gray"}>{r.status}</Badge></TableCell><TableCell>{r.status==="pending"&&<div className="row-actions"><Button size="sm" onClick={()=>decide(r.id,"approved")}>Aprovar</Button><Button size="sm" variant="outline" onClick={()=>decide(r.id,"rejected")}>Rejeitar</Button></div>}</TableCell></TableRow>)}</TableBody></Table></section></>
+}
+
+function Reports({ctx}:{ctx:Context}){
+  const [rows,setRows]=useState<any[]>([]);
+  const load=useCallback(async()=>{const{data}=await supabase.from("daily_time_summary").select("*").eq("organization_id",ctx.organization.id).order("work_date",{ascending:false}).limit(500);setRows(data??[])},[ctx.organization.id]);
+  useEffect(()=>{load()},[load]);
+  function exportCsv(){const header="Funcionário,Data,Modelo,Primeira entrada,Última saída,Horas trabalhadas,Meta,Saldo,Situação,Registros\n";const body=rows.map(r=>[r.full_name,r.work_date,r.schedule_type,r.first_entry??"",r.last_exit??"",minutes(r.worked_minutes),minutes(r.target_minutes),minutes(r.balance_minutes),r.day_status,r.event_count].map((v:any)=>`"${String(v).replaceAll('"','""')}"`).join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+header+body],{type:"text/csv"}));a.download=`pontonorte-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href)}
+  return <><PageHead title="Relatórios e banco de horas" desc="Espelho diário, meta contratual e crédito ou débito automático" action={<Button onClick={exportCsv}><Download/>Exportar para Excel</Button>}/><section className="surface table-surface"><Table><TableHeader><TableRow><TableHead>Funcionário</TableHead><TableHead>Data</TableHead><TableHead>Jornada</TableHead><TableHead>Entrada / saída</TableHead><TableHead>Trabalhado</TableHead><TableHead>Meta</TableHead><TableHead>Saldo</TableHead><TableHead>Situação</TableHead></TableRow></TableHeader><TableBody>{rows.filter(r=>r.work_date).map((r,i)=><TableRow key={r.employee_id+r.work_date+i}><TableCell>{r.full_name}</TableCell><TableCell>{r.work_date}</TableCell><TableCell>{r.schedule_type==="flexible"?"Flexível":"Fixa"}</TableCell><TableCell>{r.first_entry?dateTime(r.first_entry):"—"}<br/><small>{r.last_exit?dateTime(r.last_exit):"Em aberto"}</small></TableCell><TableCell>{minutes(r.worked_minutes)}</TableCell><TableCell>{minutes(r.target_minutes)}</TableCell><TableCell><Badge color={r.balance_minutes>=0?"green":"amber"}>{minutes(r.balance_minutes)}</Badge></TableCell><TableCell>{({completed:"Cumprida",debit:"Débito",open:"Em andamento",absent:"Ausente"} as any)[r.day_status]??r.day_status}</TableCell></TableRow>)}</TableBody></Table></section></>
+}
+
+function Methods({ctx}:{ctx:Context}){
+  const [rows,setRows]=useState<any[]>([]);const[qr,setQr]=useState<{image:string;expires:string}|null>(null);const[qrError,setQrError]=useState("");
+  const load=useCallback(async()=>{const{data}=await supabase.from("clock_methods").select("*").eq("organization_id",ctx.organization.id).order("method");setRows(data??[])},[ctx.organization.id]);
+  useEffect(()=>{load()},[load]);
+  async function toggle(r:any,enabled:boolean){await supabase.from("clock_methods").update({enabled,updated_at:new Date().toISOString()}).eq("id",r.id);load()}
+  async function generateQr(){
+    setQrError("");try{
+      const position=await new Promise<GeolocationPosition>((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:15000}));
+      const token=`PN-${crypto.randomUUID()}-${Date.now()}`;const expires=new Date(Date.now()+2*60*1000).toISOString();
+      const{data:{user}}=await supabase.auth.getUser();if(!user)throw new Error("Sessão inválida.");
+      const{error}=await supabase.from("qr_sessions").insert({organization_id:ctx.organization.id,token_hash:await sha256(token),location_name:ctx.organization.trade_name,latitude:position.coords.latitude,longitude:position.coords.longitude,radius_meters:150,expires_at:expires,created_by:user.id});
+      if(error)throw error;setQr({image:await QRCode.toDataURL(token,{width:320,margin:2,color:{dark:"#0b2e4c",light:"#ffffff"}}),expires});
+    }catch(e){setQrError(e instanceof Error?e.message:"Não foi possível gerar o QR Code.")}
+  }
+  return <><PageHead title="Métodos de ponto" desc="A empresa decide o que aparece no aplicativo"/><section className="methods">{rows.map(r=><article className="surface" key={r.id}><header><span><Fingerprint/></span><Switch disabled={!["platform_admin","company_owner","hr_admin"].includes(ctx.member.role)} checked={r.enabled} onCheckedChange={v=>toggle(r,v)}/></header><h2>{methodLabels[r.method]??r.method}</h2><p>{r.method==="face"?"Exige fornecedor de prova de vida e consentimento LGPD.":r.require_location?"Solicita a localização do aparelho.":"Registro sem localização."}</p><footer><Badge color={r.enabled?"green":"gray"}>{r.enabled?"Disponível":"Desativado"}</Badge></footer></article>)}</section><section className="surface qr-panel"><div><h2>QR Code da empresa</h2><p>O código expira em 2 minutos e valida uma área de 150 metros.</p><Button onClick={generateQr}><RefreshCw/>Gerar novo QR Code</Button><ErrorBox message={qrError}/></div>{qr&&<figure><img src={qr.image} alt="QR Code temporário para registro de ponto"/><figcaption>Válido até {new Intl.DateTimeFormat("pt-BR",{timeStyle:"short"}).format(new Date(qr.expires))}</figcaption></figure>}</section></>
+}
+
+function Companies({ctx}:{ctx:Context}){
+  const [rows,setRows]=useState<any[]>([]);const [open,setOpen]=useState(false);const [error,setError]=useState("");
+  const [form,setForm]=useState({company_code:"",legal_name:"",trade_name:"",tax_id:"",owner_name:"",owner_username:"",owner_email:"",owner_password:""});
+  const load=useCallback(async()=>{const{data}=await supabase.from("organizations").select("*").order("trade_name");setRows(data??[])},[]);
+  useEffect(()=>{load()},[load]);
+  if(ctx.member.role!=="platform_admin")return <section className="surface empty-state"><ShieldCheck/><h2>Acesso restrito à CP Ocis</h2></section>;
+  async function create(e:FormEvent){e.preventDefault();setError("");const{error}=await supabase.functions.invoke("provision-company",{body:form});if(error)return setError(error.message);setOpen(false);load()}
+  return <><PageHead title="Empresas clientes" desc="Cada empresa possui código e dados completamente isolados" action={<Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button><Plus/>Nova empresa</Button></DialogTrigger><DialogContent className="wide-dialog"><DialogHeader><DialogTitle>Cadastrar empresa</DialogTitle><DialogDescription>Também será criado o primeiro administrador da empresa.</DialogDescription></DialogHeader><form className="form-grid" onSubmit={create}><label>Código da empresa<Input required minLength={4} maxLength={12} value={form.company_code} onChange={e=>setForm({...form,company_code:e.target.value.toUpperCase()})}/></label><label>Nome fantasia<Input required value={form.trade_name} onChange={e=>setForm({...form,trade_name:e.target.value})}/></label><label>Razão social<Input required value={form.legal_name} onChange={e=>setForm({...form,legal_name:e.target.value})}/></label><label>CNPJ/CPF<Input value={form.tax_id} onChange={e=>setForm({...form,tax_id:e.target.value})}/></label><label>Nome do administrador<Input required value={form.owner_name} onChange={e=>setForm({...form,owner_name:e.target.value})}/></label><label>Usuário do administrador<Input required value={form.owner_username} onChange={e=>setForm({...form,owner_username:e.target.value.toLowerCase()})}/></label><label>E-mail pessoal<Input type="email" value={form.owner_email} onChange={e=>setForm({...form,owner_email:e.target.value})}/></label><label>Senha provisória<Input required minLength={8} type="password" value={form.owner_password} onChange={e=>setForm({...form,owner_password:e.target.value})}/></label><ErrorBox message={error}/><DialogFooter><Button>Criar empresa</Button></DialogFooter></form></DialogContent></Dialog>}/><section className="surface table-surface"><Table><TableHeader><TableRow><TableHead>Empresa</TableHead><TableHead>Código</TableHead><TableHead>Plano</TableHead><TableHead>Status</TableHead><TableHead>Criada em</TableHead></TableRow></TableHeader><TableBody>{rows.map(r=><TableRow key={r.id}><TableCell><b>{r.trade_name}</b><br/><small>{r.legal_name}</small></TableCell><TableCell><Badge color="blue">{r.company_code}</Badge></TableCell><TableCell>{r.plan}</TableCell><TableCell><Badge color={r.status==="active"?"green":"gray"}>{r.status}</Badge></TableCell><TableCell>{dateTime(r.created_at)}</TableCell></TableRow>)}</TableBody></Table></section></>
+}
+
+function Configuration({ctx,onRefresh}:{ctx:Context;onRefresh:()=>void}){
+  const [name,setName]=useState(ctx.organization.trade_name);const [legal,setLegal]=useState(ctx.organization.legal_name);const [timezone,setTimezone]=useState(ctx.organization.timezone);const [saved,setSaved]=useState(false);
+  async function save(e:FormEvent){e.preventDefault();const{error}=await supabase.from("organizations").update({trade_name:name,legal_name:legal,timezone,updated_at:new Date().toISOString()}).eq("id",ctx.organization.id);if(!error){setSaved(true);onRefresh()}}
+  return <><PageHead title="Configurações" desc="Perfil e regras gerais da empresa"/><form className="surface settings-form" onSubmit={save}><label>Código da empresa<Input disabled value={ctx.organization.company_code}/></label><label>Nome fantasia<Input value={name} onChange={e=>setName(e.target.value)}/></label><label>Razão social<Input value={legal} onChange={e=>setLegal(e.target.value)}/></label><label>Fuso horário<Input value={timezone} onChange={e=>setTimezone(e.target.value)}/></label><Button disabled={!["platform_admin","company_owner","hr_admin"].includes(ctx.member.role)}>Salvar alterações</Button>{saved&&<span className="saved"><Check/>Salvo</span>}</form></>
+}
+
+function Admin({ctx,onRefresh}:{ctx:Context;onRefresh:()=>void}){
+  const [page,setPage]=useState<Page>("Hoje");const[drawer,setDrawer]=useState(false);
+  const visible=useMemo(()=>menu.filter(([name])=>{
+    if(name==="Empresas")return ctx.member.role==="platform_admin";
+    if(ctx.member.role==="manager")return ["Hoje","Funcionários","Dispositivos","Chamada","Conferência","Ocorrências","Relatórios","Configurações"].includes(name);
+    return ctx.member.role!=="employee";
+  }),[ctx.member.role]);
+  async function logout(){await supabase.auth.signOut();location.reload()}
+  return <main className="admin-shell"><aside className={"side "+(drawer?"open":"")}><header><Brand/><button onClick={()=>setDrawer(false)}><X/></button></header><button className="company-switch"><span>{initials(ctx.organization.trade_name)}</span><p><b>{ctx.organization.trade_name}</b><small>{ctx.organization.company_code}</small></p><ChevronDown/></button><nav>{visible.map(([name,I])=><button className={page===name?"active":""} key={name} onClick={()=>{setPage(name);setDrawer(false)}}><I/><span>{name}</span></button>)}</nav><footer><span className="avatar">{initials(ctx.employee.full_name)}</span><p><b>{ctx.employee.full_name}</b><small>{labels[ctx.member.role]}</small></p><button className="icon-plain" onClick={logout}><LogOut/></button></footer></aside>{drawer&&<button className="scrim" onClick={()=>setDrawer(false)}/>}<section className="admin-main"><header className="appbar"><div><button className="menu-button" onClick={()=>setDrawer(true)}><Menu/></button><span><b>{ctx.organization.trade_name}</b><small>Gestão de ponto</small></span></div><aside><button className="notify"><Bell/></button></aside></header><div className="admin-content">{page==="Hoje"&&<Dashboard ctx={ctx}/>} {page==="Funcionários"&&<Employees ctx={ctx}/>} {page==="Dispositivos"&&<Devices ctx={ctx}/>} {page==="Terminais"&&<Terminals ctx={ctx}/>} {page==="Setores e líderes"&&<Departments ctx={ctx}/>} {page==="Chamada"&&<RollCall ctx={ctx}/>} {page==="Jornadas"&&<Schedules ctx={ctx}/>} {page==="Conferência"&&<ReviewEntries ctx={ctx}/>} {page==="Ocorrências"&&<Occurrences ctx={ctx}/>} {page==="Relatórios"&&<Reports ctx={ctx}/>} {page==="Métodos de ponto"&&<Methods ctx={ctx}/>} {page==="Empresas"&&<Companies ctx={ctx}/>} {page==="Configurações"&&<Configuration ctx={ctx} onRefresh={onRefresh}/>}</div></section></main>
+}
+
+export default function Home(){
+  const [ctx,setCtx]=useState<Context|null>(null);const[loading,setLoading]=useState(true);const[error,setError]=useState("");
+  const load=useCallback(async()=>{
+    setLoading(true);setError("");
+    const {data:{user}}=await supabase.auth.getUser();
+    if(!user){setCtx(null);setLoading(false);return}
+    const [memberResult,employeeResult]=await Promise.all([
+      supabase.from("organization_members").select("*,organizations(*)").eq("user_id",user.id).eq("active",true).limit(1).single(),
+      supabase.from("employees").select("*").eq("auth_user_id",user.id).single(),
+    ]);
+    if(memberResult.error||employeeResult.error){setError("Seu usuário não possui um vínculo ativo.");setLoading(false);return}
+    setCtx({member:memberResult.data,employee:employeeResult.data,organization:memberResult.data.organizations});setLoading(false);
+  },[]);
+  useEffect(()=>{load();const{data}=supabase.auth.onAuthStateChange((_event,session)=>{if(!session){setCtx(null);setLoading(false)}else setTimeout(load,0)});return()=>data.subscription.unsubscribe()},[load]);
+  if(loading)return <main className="auth-stage"><RefreshCw className="spin"/></main>;
+  if(error)return <main className="auth-stage"><section className="auth-card"><Brand/><ErrorBox message={error}/><Button onClick={()=>supabase.auth.signOut().then(()=>location.reload())}>Voltar ao login</Button></section></main>;
+  if(!ctx)return <Login onLogin={load}/>;
+  if(ctx.employee.must_change_password)return <ChangePassword employee={ctx.employee} onDone={load}/>;
+  if(ctx.member.role==="employee")return <main className="auth-stage"><section className="auth-card"><Brand/><div className="auth-copy"><span><ShieldCheck/></span><h1>Use o aplicativo PontoNorte</h1><p>O portal web é reservado ao RH e aos líderes. Instale o aplicativo Android para registrar seus pontos.</p></div><Button onClick={()=>supabase.auth.signOut().then(()=>location.reload())}>Sair</Button></section></main>;
+  return <Admin ctx={ctx} onRefresh={load}/>;
+}
