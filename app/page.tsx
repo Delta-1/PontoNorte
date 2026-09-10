@@ -47,7 +47,6 @@ function ErrorBox({message}:{message:string}){return message?<div className="for
 
 function Login({onLogin}:{onLogin:()=>void}){
   const [signup,setSignup]=useState(false);
-  if(signup)return <CompanySignup onBack={()=>setSignup(false)}/>;
   const [company,setCompany]=useState("CPUSIS");
   const [username,setUsername]=useState("");
   const [password,setPassword]=useState("");
@@ -58,6 +57,7 @@ function Login({onLogin}:{onLogin:()=>void}){
     setLoading(false);
     if(error) setError("Código da empresa, usuário ou senha incorretos."); else onLogin();
   }
+  if(signup)return <CompanySignup onBack={()=>setSignup(false)}/>;
   return <main className="auth-stage"><section className="auth-card"><Brand/><div className="auth-copy"><span><ShieldCheck/></span><h1>Acesse o PontoNorte</h1><p>Entre com o código e o usuário da sua empresa.</p></div><form onSubmit={submit}><label>Código da empresa<Input value={company} onChange={e=>setCompany(e.target.value.toUpperCase())} autoCapitalize="characters"/></label><label>Usuário<Input value={username} onChange={e=>setUsername(e.target.value.toLowerCase())} autoCapitalize="none"/></label><label>Senha<Input value={password} onChange={e=>setPassword(e.target.value)} type="password"/></label><ErrorBox message={error}/><Button disabled={loading}>{loading?<RefreshCw className="spin"/>:"Entrar"}</Button><Button type="button" variant="outline" onClick={()=>setSignup(true)}>Cadastrar minha empresa</Button></form><small>Uma plataforma para todas as empresas</small></section></main>
 }
 
