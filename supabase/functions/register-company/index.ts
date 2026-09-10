@@ -27,7 +27,7 @@ Deno.serve(async(req)=>{
     if(taxId){const{data:existing}=await admin.from("organizations").select("id").eq("tax_id",taxId).maybeSingle();if(existing)return json({error:"Esta empresa já possui cadastro."},409)}
     const prefix=tradeName.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]/g,"").toUpperCase().slice(0,4).padEnd(4,"N");let companyCode="";
     for(let i=0;i<8;i++){companyCode=prefix+Array.from(crypto.getRandomValues(new Uint8Array(3))).map(x=>"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[x%32]).join("");const{data}=await admin.from("organizations").select("id").eq("company_code",companyCode).maybeSingle();if(!data)break}
-    const{data:org,error:orgError}=await admin.from("organizations").insert({company_code:companyCode,legal_name:legalName,trade_name:tradeName,tax_id:taxId||null,status:"active",license_status:"pending",plan:"professional",onboarding_completed_at:new Date().toISOString()}).select("id,company_code,trade_name").single();
+    const{data:org,error:orgError}=await admin.from("organizations").insert({company_code:companyCode,legal_name:legalName,trade_name:tradeName,tax_id:taxId||null,status:"onboarding",license_status:"pending",plan:"professional"}).select("id,company_code,trade_name").single();
     if(orgError||!org)return json({error:orgError?.message||"Não foi possível cadastrar a empresa."},409);
     const loginEmail=`${username}.${companyCode}@login.pontonorte.app`;
     const{data:created,error:authError}=await admin.auth.admin.createUser({email:loginEmail,password,email_confirm:true,app_metadata:{organization_id:org.id,role:"company_owner",company_code:companyCode},user_metadata:{full_name:ownerName,contact_email:email}});
@@ -49,6 +49,9 @@ Deno.serve(async(req)=>{
       const stage=memberError?"acesso do administrador":secretError?"PIN do terminal":"métodos de ponto";
       return json({error:`Não foi possível configurar ${stage}. Nenhuma conta foi mantida.`},409)
     }
-    return json({company_code:companyCode,username,trade_name:tradeName,license_required:true},201);
+    const activationToken=`${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g,"");
+    const{error:claimError}=await admin.from("company_activation_claims").insert({organization_id:org.id,token_hash:await sha256(activationToken)});
+    if(claimError){await admin.auth.admin.deleteUser(created.user.id);await admin.from("organizations").delete().eq("id",org.id);return json({error:"Não foi possível preparar a ativação. Nenhuma conta foi mantida."},409)}
+    return json({activation_token:activationToken,username,trade_name:tradeName,awaiting_activation:true},201);
   }catch(error){console.error("register-company failure",error);return json({error:"Não foi possível concluir o cadastro agora."},500)}
 });

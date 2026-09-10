@@ -337,6 +337,17 @@ create table public.license_codes (
   created_by uuid not null references auth.users(id) on delete restrict,
   created_at timestamptz not null default now()
 );
+
+-- Comprovante secreto entregue somente ao navegador/app que iniciou o cadastro.
+-- Permite ativar a primeira credencial sem revelar o código interno da empresa.
+create table public.company_activation_claims (
+  organization_id uuid primary key references public.organizations(id) on delete cascade,
+  token_hash text not null unique,
+  failed_attempts integer not null default 0,
+  locked_until timestamptz,
+  activated_at timestamptz,
+  created_at timestamptz not null default now()
+);
 create index license_codes_org_date_idx on public.license_codes(organization_id,created_at desc);
 create index license_codes_created_by_idx on public.license_codes(created_by);
 create index registration_attempts_ip_date_idx on public.registration_attempts(ip_hash,created_at desc);
@@ -451,11 +462,13 @@ alter table public.holidays enable row level security;
 alter table public.audit_logs enable row level security;
 alter table public.registration_attempts enable row level security;
 alter table public.license_codes enable row level security;
+alter table public.company_activation_claims enable row level security;
 alter table public.password_reset_requests enable row level security;
 
 create policy employee_secrets_deny on public.employee_secrets for all to authenticated using (false) with check (false);
 create policy registration_attempts_deny on public.registration_attempts for all to authenticated using (false) with check (false);
 create policy license_codes_platform_read on public.license_codes for select to authenticated using (private.is_platform_admin());
+create policy company_activation_claims_deny on public.company_activation_claims for all to authenticated using (false) with check (false);
 create policy password_reset_platform_read on public.password_reset_requests for select to authenticated using (private.is_platform_admin());
 
 create policy organizations_read on public.organizations for select to authenticated using (private.is_org_member(id));
@@ -545,6 +558,7 @@ grant insert on public.employees to authenticated;
 grant usage,select on all sequences in schema public to authenticated;
 revoke all on public.employee_secrets from public,anon,authenticated;
 revoke all on public.registration_attempts from public,anon,authenticated;
+revoke all on public.company_activation_claims from public,anon,authenticated;
 grant select on public.license_codes to authenticated;
 
 insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types) values
