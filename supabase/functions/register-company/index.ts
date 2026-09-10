@@ -37,8 +37,18 @@ Deno.serve(async(req)=>{
     if(employeeError||!employee){await admin.auth.admin.deleteUser(created.user.id);await admin.from("organizations").delete().eq("id",org.id);return json({error:employeeError?.message||"Não foi possível criar o perfil."},409)}
     const{error:memberError}=await admin.from("organization_members").insert({organization_id:org.id,user_id:created.user.id,role:"company_owner"});
     const{error:secretError}=await admin.from("employee_secrets").insert({organization_id:org.id,employee_id:employee.id,pin_hash:await hashPin(pin)});
-    const{error:methodError}=await admin.from("clock_methods").insert([{organization_id:org.id,method:"mobile",enabled:true,require_location:false},{organization_id:org.id,method:"qr_code",enabled:true,require_location:true},{organization_id:org.id,method:"face",enabled:false,require_liveness:true},{organization_id:org.id,method:"fingerprint",enabled:false}]);
-    if(memberError||secretError||methodError){await admin.auth.admin.deleteUser(created.user.id);await admin.from("organizations").delete().eq("id",org.id);return json({error:"O cadastro não foi concluído; nenhuma conta foi mantida. Tente novamente."},409)}
+    const{error:methodError}=await admin.from("clock_methods").insert([
+      {organization_id:org.id,method:"mobile",enabled:true,require_location:false,require_liveness:false,configuration:{}},
+      {organization_id:org.id,method:"qr_code",enabled:true,require_location:true,require_liveness:false,configuration:{}},
+      {organization_id:org.id,method:"face",enabled:false,require_location:false,require_liveness:true,configuration:{}},
+      {organization_id:org.id,method:"fingerprint",enabled:false,require_location:false,require_liveness:false,configuration:{}},
+    ]);
+    if(memberError||secretError||methodError){
+      console.error("register-company setup failure",{member:memberError?.message,secret:secretError?.message,methods:methodError?.message});
+      await admin.auth.admin.deleteUser(created.user.id);await admin.from("organizations").delete().eq("id",org.id);
+      const stage=memberError?"acesso do administrador":secretError?"PIN do terminal":"métodos de ponto";
+      return json({error:`Não foi possível configurar ${stage}. Nenhuma conta foi mantida.`},409)
+    }
     return json({company_code:companyCode,username,trade_name:tradeName,license_required:true},201);
   }catch(error){console.error("register-company failure",error);return json({error:"Não foi possível concluir o cadastro agora."},500)}
 });
