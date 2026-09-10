@@ -103,6 +103,21 @@ create table public.employees (
   unique (organization_id, employee_code)
 );
 
+create table public.password_reset_requests (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  employee_id uuid not null references public.employees(id) on delete cascade,
+  protocol text not null unique check (protocol ~ '^PN-[A-Z0-9]{6}$'),
+  status text not null default 'pending' check (status in ('pending','resolved','cancelled')),
+  requested_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  resolved_by uuid references auth.users(id) on delete set null,
+  notes text
+);
+create index password_reset_org_status_idx on public.password_reset_requests(organization_id,status,requested_at desc);
+create index password_reset_employee_idx on public.password_reset_requests(employee_id,requested_at desc);
+create index password_reset_resolved_by_idx on public.password_reset_requests(resolved_by);
+
 create table public.clock_methods (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -436,10 +451,12 @@ alter table public.holidays enable row level security;
 alter table public.audit_logs enable row level security;
 alter table public.registration_attempts enable row level security;
 alter table public.license_codes enable row level security;
+alter table public.password_reset_requests enable row level security;
 
 create policy employee_secrets_deny on public.employee_secrets for all to authenticated using (false) with check (false);
 create policy registration_attempts_deny on public.registration_attempts for all to authenticated using (false) with check (false);
 create policy license_codes_platform_read on public.license_codes for select to authenticated using (private.is_platform_admin());
+create policy password_reset_platform_read on public.password_reset_requests for select to authenticated using (private.is_platform_admin());
 
 create policy organizations_read on public.organizations for select to authenticated using (private.is_org_member(id));
 create policy organizations_update on public.organizations for update to authenticated
@@ -514,6 +531,8 @@ using (private.has_org_role(organization_id,array['company_owner','hr_admin']::p
 with check (private.has_org_role(organization_id,array['company_owner','hr_admin']::public.member_role[]));
 create policy audit_read on public.audit_logs for select to authenticated
 using (private.has_org_role(organization_id,array['company_owner','hr_admin']::public.member_role[]));
+create policy password_reset_platform_update on public.password_reset_requests for update to authenticated
+using (private.is_platform_admin()) with check (private.is_platform_admin());
 
 grant usage on schema public to authenticated;
 grant select on all tables in schema public to authenticated;
@@ -521,6 +540,7 @@ grant insert,update,delete on public.departments,public.work_schedules,public.cl
   public.authorized_devices,public.terminals,public.qr_sessions,public.time_entry_reviews,public.justifications,
   public.attendance_calls,public.attendance_call_items,public.biometric_consents,public.holidays to authenticated;
 grant update on public.organizations,public.organization_members,public.time_entries to authenticated;
+grant update on public.password_reset_requests to authenticated;
 grant insert on public.employees to authenticated;
 grant usage,select on all sequences in schema public to authenticated;
 revoke all on public.employee_secrets from public,anon,authenticated;
