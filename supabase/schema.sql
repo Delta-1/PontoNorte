@@ -323,6 +323,7 @@ create table public.license_codes (
   created_at timestamptz not null default now()
 );
 create index license_codes_org_date_idx on public.license_codes(organization_id,created_at desc);
+create index license_codes_created_by_idx on public.license_codes(created_by);
 create index registration_attempts_ip_date_idx on public.registration_attempts(ip_hash,created_at desc);
 create index reviews_org_idx on public.time_entry_reviews(organization_id);
 create index reviews_employee_idx on public.time_entry_reviews(employee_id);
