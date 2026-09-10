@@ -22,6 +22,9 @@ create table public.organizations (
   timezone text not null default 'America/Rio_Branco',
   status text not null default 'onboarding' check (status in ('onboarding','active','suspended','cancelled')),
   plan text not null default 'professional',
+  license_status text not null default 'pending' check (license_status in ('pending','active','suspended','expired')),
+  paid_until date,
+  license_updated_at timestamptz not null default now(),
   settings jsonb not null default '{"require_device_authorization":true,"allow_offline_queue":true}'::jsonb,
   onboarding_completed_at timestamptz,
   created_at timestamptz not null default now(),
@@ -90,6 +93,8 @@ create table public.employees (
   avatar_path text,
   hired_at date,
   status public.employee_status not null default 'active',
+  terminated_at timestamptz,
+  termination_reason text,
   must_change_password boolean not null default true,
   last_password_change_at timestamptz,
   created_at timestamptz not null default now(),
@@ -301,6 +306,24 @@ create table public.audit_logs (
   ip_hash text,
   created_at timestamptz not null default now()
 );
+
+create table public.registration_attempts (
+  id bigint generated always as identity primary key,
+  ip_hash text not null,
+  created_at timestamptz not null default now()
+);
+create table public.license_codes (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  code_hash text not null unique,
+  license_until date not null,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_by uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now()
+);
+create index license_codes_org_date_idx on public.license_codes(organization_id,created_at desc);
+create index registration_attempts_ip_date_idx on public.registration_attempts(ip_hash,created_at desc);
 create index reviews_org_idx on public.time_entry_reviews(organization_id);
 create index reviews_employee_idx on public.time_entry_reviews(employee_id);
 create index reviews_reviewer_idx on public.time_entry_reviews(reviewer_user_id);
@@ -410,8 +433,12 @@ alter table public.attendance_call_items enable row level security;
 alter table public.biometric_consents enable row level security;
 alter table public.holidays enable row level security;
 alter table public.audit_logs enable row level security;
+alter table public.registration_attempts enable row level security;
+alter table public.license_codes enable row level security;
 
 create policy employee_secrets_deny on public.employee_secrets for all to authenticated using (false) with check (false);
+create policy registration_attempts_deny on public.registration_attempts for all to authenticated using (false) with check (false);
+create policy license_codes_platform_read on public.license_codes for select to authenticated using (private.is_platform_admin());
 
 create policy organizations_read on public.organizations for select to authenticated using (private.is_org_member(id));
 create policy organizations_update on public.organizations for update to authenticated
@@ -496,6 +523,8 @@ grant update on public.organizations,public.organization_members,public.time_ent
 grant insert on public.employees to authenticated;
 grant usage,select on all sequences in schema public to authenticated;
 revoke all on public.employee_secrets from public,anon,authenticated;
+revoke all on public.registration_attempts from public,anon,authenticated;
+grant select on public.license_codes to authenticated;
 
 insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types) values
   ('avatars','avatars',false,5242880,array['image/jpeg','image/png','image/webp']),

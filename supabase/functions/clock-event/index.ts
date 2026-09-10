@@ -56,8 +56,9 @@ Deno.serve(async (req) => {
       return json({ error: "Reconhecimento facial ainda não foi configurado pela empresa." }, 503);
     }
 
-    const { data: org } = await admin.from("organizations").select("settings, timezone")
+    const { data: org } = await admin.from("organizations").select("settings, timezone, license_status, paid_until")
       .eq("id", employee.organization_id).single();
+    if (org?.license_status !== "active" || (org.paid_until && new Date(org.paid_until + "T23:59:59") < new Date())) return json({ error: "Licença da empresa pendente ou vencida." }, 402);
     let deviceId: string | null = null;
     if (org?.settings?.require_device_authorization) {
       const { data: device } = await admin.from("authorized_devices").select("id, approved, revoked_at")
