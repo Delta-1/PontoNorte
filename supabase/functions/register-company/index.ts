@@ -17,11 +17,13 @@ Deno.serve(async(req)=>{
     if(!legalName||!tradeName||!ownerName||username.length<3||!email.includes("@"))return json({error:"Preencha os dados da empresa e do administrador."},400);
     if(password.length<8)return json({error:"A senha precisa ter pelo menos 8 caracteres."},400);
     if(!/^\d{6}$/.test(pin))return json({error:"Crie um PIN de 6 números para o terminal."},400);
-    if(taxId&&![11,14].includes(taxId.length))return json({error:"Informe um CPF ou CNPJ válido."},400);
-    const ip=req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()||"unknown";const ipHash=await sha256(ip);
-    const{count}=await admin.from("registration_attempts").select("*",{count:"exact",head:true}).eq("ip_hash",ipHash).gte("created_at",new Date(Date.now()-60*60*1000).toISOString());
-    if((count??0)>=3)return json({error:"Muitas tentativas. Aguarde uma hora para cadastrar outra empresa."},429);
-    await admin.from("registration_attempts").insert({ip_hash:ipHash});
+    if(!taxId||![11,14].includes(taxId.length))return json({error:"Informe um CPF ou CNPJ válido."},400);
+    // O tráfego do site pode chegar pelo mesmo proxy. Limitar por IP bloquearia
+    // empresas diferentes; por isso usamos somente um hash do documento + e-mail.
+    const registrationKey=await sha256(`${taxId}:${email}`);
+    const{count}=await admin.from("registration_attempts").select("*",{count:"exact",head:true}).eq("ip_hash",registrationKey).gte("created_at",new Date(Date.now()-60*60*1000).toISOString());
+    if((count??0)>=10)return json({error:"Muitas tentativas para estes dados. Revise as informações ou aguarde uma hora."},429);
+    await admin.from("registration_attempts").insert({ip_hash:registrationKey});
     if(taxId){const{data:existing}=await admin.from("organizations").select("id").eq("tax_id",taxId).maybeSingle();if(existing)return json({error:"Esta empresa já possui cadastro."},409)}
     const prefix=tradeName.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]/g,"").toUpperCase().slice(0,4).padEnd(4,"N");let companyCode="";
     for(let i=0;i<8;i++){companyCode=prefix+Array.from(crypto.getRandomValues(new Uint8Array(3))).map(x=>"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[x%32]).join("");const{data}=await admin.from("organizations").select("id").eq("company_code",companyCode).maybeSingle();if(!data)break}
