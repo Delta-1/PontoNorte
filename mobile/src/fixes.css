@@ -5,6 +5,19 @@
 .mobile-company-code { margin: 12px 0; padding: 22px; border: 1px solid #b9e1d1; border-radius: 16px; background: #eaf7f1; color: #0b2e4c; font-size: 34px; font-weight: 800; letter-spacing: 6px; text-align: center; }
 .location p { flex-direction: column; }
 .nav { grid-template-columns: repeat(4, 1fr); }
+.fluid-nav { --nav-index: 0; isolation: isolate; overflow: visible; height: 78px; padding: 5px 5px env(safe-area-inset-bottom); border-top: 1px solid #d8e1e6; background: #ffffffee; box-shadow: 0 -12px 30px #12354f12; backdrop-filter: blur(15px); }
+.fluid-nav .nav-fluid-highlight { position: absolute; z-index: -1; top: 5px; left: 5px; width: calc((100% - 10px) / 4); height: 62px; transform: translateX(calc(var(--nav-index) * 100%)); transition: transform .52s cubic-bezier(.22, 1.12, .36, 1); }
+.fluid-nav .nav-fluid-highlight::before { content: ""; position: absolute; inset: 5px 7px 7px; border-radius: 24px 24px 20px 20px / 22px 22px 18px 18px; background: linear-gradient(145deg, #e0f2fa, #e9f7f0); box-shadow: inset 0 1px 0 #fff, 0 7px 16px #155d8820; transform: scale(.98); }
+.fluid-nav .nav-fluid-highlight::after { content: ""; position: absolute; top: 8px; right: 19px; width: 15px; height: 8px; border-radius: 50%; background: #ffffffa8; filter: blur(1px); transform: rotate(-18deg); }
+.fluid-nav button { position: relative; z-index: 1; min-width: 0; transition: color .3s ease; -webkit-tap-highlight-color: transparent; }
+.fluid-nav button svg { transition: transform .45s cubic-bezier(.22, 1.2, .36, 1); }
+.fluid-nav button span { transition: transform .35s ease; }
+.fluid-nav button.active { color: #0e5a86; }
+.fluid-nav button.active svg { transform: translateY(-3px) scale(1.12); }
+.fluid-nav button.active span { transform: translateY(-1px); }
+.page-transition { animation: fluidPageIn .36s cubic-bezier(.22, .8, .36, 1) both; }
+@keyframes fluidPageIn { from { opacity: .25; transform: translateX(9px) scale(.992); } to { opacity: 1; transform: translateX(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .fluid-nav .nav-fluid-highlight, .fluid-nav button svg, .fluid-nav button span { transition: none; } .page-transition { animation: none; } }
 .justify-form { display: grid; gap: 14px; padding: 17px; }
 .justify-form select,
 .justify-form textarea,
