@@ -88,6 +88,9 @@ create table public.employees (
   phone text,
   cpf text,
   job_title text,
+  cbo_code text check (cbo_code is null or cbo_code ~ '^[0-9]{6}$'),
+  cbo_title text,
+  personal_qr_token text not null default encode(gen_random_bytes(24), 'hex'),
   birth_date date,
   gender text,
   avatar_path text,
@@ -216,6 +219,7 @@ create index time_entries_org_date_idx on public.time_entries (organization_id, 
 create index employees_org_idx on public.employees(organization_id);
 create index employees_department_idx on public.employees(department_id);
 create index employees_schedule_idx on public.employees(schedule_id);
+create unique index employees_personal_qr_token_idx on public.employees(personal_qr_token);
 create index members_user_idx on public.organization_members(user_id);
 create index members_department_idx on public.organization_members(department_id);
 create index devices_employee_idx on public.authorized_devices(employee_id);

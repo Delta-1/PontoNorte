@@ -4,21 +4,6 @@ import { corsHeaders, json } from "../_shared/cors.ts";
 
 const sequence = ["entry", "break_start", "break_end", "exit"] as const;
 
-async function sha256(value: string) {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function distanceMeters(aLat: number, aLon: number, bLat: number, bLon: number) {
-  const toRad = (value: number) => value * Math.PI / 180;
-  const dLat = toRad(bLat - aLat);
-  const dLon = toRad(bLon - aLon);
-  const q = Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) ** 2;
-  return 6371000 * 2 * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Método não permitido." }, 405);
@@ -43,7 +28,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: employee } = await admin.from("employees")
-      .select("id, organization_id, status, must_change_password")
+      .select("id, organization_id, status, must_change_password, personal_qr_token")
       .eq("auth_user_id", userData.user.id).single();
     if (!employee || employee.status !== "active") return json({ error: "Funcionário inativo ou não encontrado." }, 403);
     if (employee.must_change_password) return json({ error: "Troque sua senha antes de registrar o ponto." }, 428);
@@ -73,18 +58,11 @@ Deno.serve(async (req) => {
       return json({ error: "A localização é obrigatória para este registro." }, 400);
     }
 
-    let qrSessionId: string | null = null;
     if (body.method === "qr_code") {
       if (!body.qr_token) return json({ error: "QR Code inválido." }, 400);
-      const hash = await sha256(body.qr_token);
-      const { data: qr } = await admin.from("qr_sessions").select("*")
-        .eq("organization_id", employee.organization_id).eq("token_hash", hash)
-        .gt("expires_at", new Date().toISOString()).single();
-      if (!qr) return json({ error: "QR Code inválido ou expirado." }, 400);
-      qrSessionId = qr.id;
-      if (qr.latitude != null && qr.longitude != null && qr.radius_meters != null) {
-        const distance = distanceMeters(Number(body.latitude), Number(body.longitude), Number(qr.latitude), Number(qr.longitude));
-        if (distance > qr.radius_meters) return json({ error: "Você está fora da área permitida." }, 403);
+      const [prefix, organizationId, employeeId, token] = String(body.qr_token).trim().split(":");
+      if (prefix !== "PNEMP" || organizationId !== employee.organization_id || employeeId !== employee.id || token !== employee.personal_qr_token) {
+        return json({ error: "Este QR Code não pertence ao usuário conectado." }, 403);
       }
     }
 
@@ -108,7 +86,7 @@ Deno.serve(async (req) => {
       accuracy_meters: body.accuracy_meters ?? null,
       device_id: deviceId,
       client_event_id: body.client_event_id,
-      qr_session_id: qrSessionId,
+      qr_session_id: null,
       evidence_path: body.evidence_path ?? null,
       status: body.method === "face" ? "pending_review" : "valid",
       created_by: userData.user.id,

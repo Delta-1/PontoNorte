@@ -4,7 +4,7 @@ import { corsHeaders, json } from "../_shared/cors.ts";
 import { hashPin } from "../_shared/pin.ts";
 
 type CreateUserBody = {
-  action?: "create" | "set_status" | "delete";
+  action?: "create" | "update" | "set_status" | "rotate_qr" | "delete";
   employee_id?: string;
   status?: "active" | "inactive" | "on_leave" | "terminated";
   termination_reason?: string | null;
@@ -19,6 +19,8 @@ type CreateUserBody = {
   email?: string | null;
   phone?: string | null;
   job_title?: string | null;
+  cbo_code?: string | null;
+  cbo_title?: string | null;
   hired_at?: string | null;
   cpf?: string | null;
   birth_date?: string | null;
@@ -27,6 +29,11 @@ type CreateUserBody = {
 };
 
 const allowedCreators = ["platform_admin", "company_owner", "hr_admin", "hr_agent", "manager"];
+
+function newPersonalQrToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  return Array.from(bytes).map((value) => value.toString(16).padStart(2, "0")).join("");
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -59,19 +66,71 @@ Deno.serve(async (req) => {
       m.role === "platform_admin" ||
       (m.organization_id === body.organization_id && allowedCreators.includes(m.role))
     );
-    if (!creator) return json({ error: "Você não pode criar usuários nesta empresa." }, 403);
     const action = body.action ?? "create";
     if (action !== "create") {
       if (!body.employee_id) return json({ error: "Funcionário obrigatório." }, 400);
-      const { data: target } = await admin.from("employees").select("id,auth_user_id,department_id,full_name").eq("id",body.employee_id).eq("organization_id",body.organization_id).single();
+      const { data: target } = await admin.from("employees").select("id,auth_user_id,department_id,full_name,username,personal_qr_token").eq("id",body.employee_id).eq("organization_id",body.organization_id).single();
       if (!target) return json({ error: "Funcionário não encontrado." }, 404);
-      if (creator.role === "manager" && target.department_id !== creator.department_id) return json({ error: "O líder só pode administrar seu próprio setor." }, 403);
+      const isSelfProfileUpdate = action === "update" && target.auth_user_id === userData.user.id;
+      if (!creator && !isSelfProfileUpdate) return json({ error: "Você não pode alterar este funcionário." }, 403);
+      if (creator?.role === "manager" && target.department_id !== creator.department_id) return json({ error: "O líder só pode administrar seu próprio setor." }, 403);
+      if (action === "rotate_qr") {
+        if (!creator) return json({ error: "Apenas a gestão pode renovar o QR Code." }, 403);
+        const personalQrToken = newPersonalQrToken();
+        const { error: qrError } = await admin.from("employees").update({ personal_qr_token: personalQrToken, updated_at: new Date().toISOString() }).eq("id", target.id);
+        if (qrError) return json({ error: qrError.message }, 400);
+        await admin.from("audit_logs").insert({organization_id:body.organization_id,actor_user_id:userData.user.id,action:"employee.qr_rotated",entity_type:"employee",entity_id:target.id});
+        return json({ success: true, personal_qr_token: personalQrToken });
+      }
       if (action === "delete") {
-        if (!["platform_admin","company_owner","hr_admin"].includes(creator.role)) return json({ error: "Somente o administrador pode excluir definitivamente." }, 403);
+        if (!creator || !["platform_admin","company_owner","hr_admin"].includes(creator.role)) return json({ error: "Somente o administrador pode excluir definitivamente." }, 403);
         await admin.from("employees").delete().eq("id",target.id);
         if (target.auth_user_id) await admin.auth.admin.deleteUser(target.auth_user_id);
         await admin.from("audit_logs").insert({organization_id:body.organization_id,actor_user_id:userData.user.id,action:"employee.deleted",entity_type:"employee",entity_id:target.id,before_data:{full_name:target.full_name}});
         return json({ success:true });
+      }
+      if (action === "update") {
+        const cboCode = body.cbo_code?.replace(/\D/g, "") || null;
+        if (cboCode && cboCode.length !== 6) return json({ error: "O CBO deve ter seis dígitos." }, 400);
+        const cpf = body.cpf?.replace(/\D/g, "") || null;
+        if (!isSelfProfileUpdate && cpf && cpf.length !== 11) return json({ error: "Informe um CPF com 11 dígitos." }, 400);
+        const updates: Record<string, unknown> = isSelfProfileUpdate ? {
+          job_title: body.job_title?.trim() || null,
+          cbo_code: cboCode,
+          cbo_title: body.cbo_title?.trim() || null,
+          phone: body.phone?.trim() || null,
+          email: body.email?.trim().toLowerCase() || null,
+          updated_at: new Date().toISOString(),
+        } : {
+          full_name: body.full_name?.trim() || target.full_name,
+          employee_code: body.employee_code?.trim(),
+          department_id: body.department_id ?? null,
+          schedule_id: body.schedule_id ?? null,
+          cpf,
+          birth_date: body.birth_date || null,
+          gender: body.gender || null,
+          hired_at: body.hired_at || null,
+          job_title: body.job_title?.trim() || null,
+          cbo_code: cboCode,
+          cbo_title: body.cbo_title?.trim() || null,
+          phone: body.phone?.trim() || null,
+          email: body.email?.trim().toLowerCase() || null,
+          updated_at: new Date().toISOString(),
+        };
+        if (!isSelfProfileUpdate && creator?.role === "manager") {
+          updates.department_id = creator.department_id;
+        }
+        const { data: updated, error: updateError } = await admin.from("employees").update(updates).eq("id", target.id).select("*").single();
+        if (updateError) return json({ error: updateError.message }, 400);
+        if (!isSelfProfileUpdate && target.auth_user_id) {
+          await admin.from("organization_members").update({ department_id: updates.department_id }).eq("user_id", target.auth_user_id).eq("organization_id", body.organization_id);
+        }
+        if (!isSelfProfileUpdate && body.pin) {
+          if (!/^\d{6}$/.test(body.pin)) return json({ error: "O PIN deve ter seis números." }, 400);
+          await admin.from("employee_secrets").update({ pin_hash: await hashPin(body.pin), failed_attempts: 0, locked_until: null, updated_at: new Date().toISOString() }).eq("employee_id", target.id);
+        }
+        await admin.from("audit_logs").insert({organization_id:body.organization_id,actor_user_id:userData.user.id,action:isSelfProfileUpdate?"employee.profile_updated":"employee.updated",entity_type:"employee",entity_id:target.id,after_data:{cbo_code:cboCode,job_title:updates.job_title}});
+        return json({ employee: updated });
       }
       if (!body.status) return json({ error: "Situação obrigatória." }, 400);
       const { error: statusError } = await admin.from("employees").update({status:body.status,terminated_at:body.status==="terminated"?new Date().toISOString():null,termination_reason:body.status==="terminated"?(body.termination_reason?.trim()||"Desligamento registrado pelo responsável"):null,updated_at:new Date().toISOString()}).eq("id",target.id);
@@ -80,6 +139,8 @@ Deno.serve(async (req) => {
       return json({ success:true,status:body.status });
     }
 
+    if (!creator) return json({ error: "Você não pode criar usuários nesta empresa." }, 403);
+
     const username = body.username?.toLowerCase().trim().replace(/[^a-z0-9._-]/g, "");
     if (!username || username.length < 3 || !body.full_name || !body.employee_code) return json({ error: "Nome, matrícula e usuário são obrigatórios." }, 400);
     if (!body.password || body.password.length < 8) return json({ error: "A senha provisória deve ter pelo menos 8 caracteres." }, 400);
@@ -87,6 +148,8 @@ Deno.serve(async (req) => {
     if (cpf && cpf.length !== 11) return json({ error: "Informe um CPF com 11 dígitos." }, 400);
     if (!/^\d{6}$/.test(body.pin ?? "")) return json({ error: "O PIN do terminal deve ter 6 números." }, 400);
     if (!body.role) return json({ error: "Perfil obrigatório." }, 400);
+    const cboCode = body.cbo_code?.replace(/\D/g, "") || null;
+    if (cboCode && cboCode.length !== 6) return json({ error: "O CBO deve ter seis dígitos." }, 400);
     if (body.role === "manager" && !body.department_id) return json({ error: "Um líder precisa estar vinculado a um setor." }, 400);
     if (creator.role === "manager" && (body.role !== "employee" || body.department_id !== creator.department_id)) return json({ error: "O líder só pode cadastrar funcionários no próprio setor." }, 403);
     if (creator.role === "hr_agent" && !["employee", "manager"].includes(body.role)) {
@@ -130,12 +193,14 @@ Deno.serve(async (req) => {
       email: body.email ?? null,
       phone: body.phone ?? null,
       job_title: body.job_title ?? null,
+      cbo_code: cboCode,
+      cbo_title: body.cbo_title?.trim() || null,
       hired_at: body.hired_at ?? null,
       cpf,
       birth_date: body.birth_date ?? null,
       gender: body.gender ?? null,
       must_change_password: true,
-    }).select("id").single();
+    }).select("id,personal_qr_token").single();
 
     if (employeeError || !employee) {
       await admin.auth.admin.deleteUser(created.user.id);
