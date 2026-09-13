@@ -1,4 +1,8 @@
 .login > footer { color: #71808d; }
+html, body, #root { min-height: 100%; }
+body { overflow-x: hidden; }
+button, input, select, textarea { font: inherit; }
+.screen { width: 100%; min-height: 100dvh; overflow-x: hidden; }
 .signup-mobile { overflow: auto; padding-bottom: 32px; }
 .signup-mobile header { display: flex; align-items: center; justify-content: space-between; }
 .signup-mobile form { gap: 12px; }
@@ -48,11 +52,37 @@
 .terminal-form .primary { margin-top: 3px; }
 .terminal > footer { display: flex; align-items: center; gap: 8px; margin-top: 20px; color: #71818d; font-size: 11px; line-height: 1.45; }
 .terminal > footer svg { width: 18px; flex: none; color: #28885c; }
-.manager-app { padding-bottom: 24px; }
+.manager-app { padding-bottom: calc(86px + env(safe-area-inset-bottom)); }
 .manager-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .manager-metrics article { display: flex; min-height: 82px; flex-direction: column; justify-content: center; padding: 12px; border: 1px solid #d9e1e6; border-radius: 11px; background: #fff; }
 .manager-metrics b { color: #153a55; font-size: 24px; }.manager-metrics span { color: #72828e; font-size: 10px; }
 .manager-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }.manager-actions button { font-size: 11px; }
 .mobile-create { display: grid; gap: 13px; padding: 17px; }.mobile-create h2 { margin: 0 0 3px; font-size: 16px; }.two-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.mobile-create > *, .two-fields > *, .field, .field input, .field select, .field textarea { min-width: 0; max-width: 100%; }
+.mobile-create input, .mobile-create select, .profile-edit input { width: 100%; }
+.manager-shortcuts { display: grid; gap: 9px; margin-top: 14px; }
+.manager-shortcuts button { display: flex; width: 100%; min-height: 76px; align-items: center; gap: 13px; padding: 15px; color: #173149; text-align: left; }
+.manager-shortcuts button > svg { width: 23px; flex: none; color: #17638e; }
+.manager-shortcuts button span { display: flex; min-width: 0; flex-direction: column; }
+.manager-shortcuts button b { font-size: 13px; }
+.manager-shortcuts button small { margin-top: 3px; color: #758591; font-size: 10px; }
+.compact-clock { display: grid; gap: 15px; }
+.compact-clock p { margin: 0; }
+.compact-clock .primary { background: #44c781; color: #082e24; }
+.mobile-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.mobile-section-head h1 { margin: 4px 0 0; font-size: 24px; }
+.mobile-section-head .link { display: flex; align-items: center; gap: 5px; }
+.mobile-section-head .link svg { width: 15px; }
+.small-action { min-height: 40px; padding: 0 12px; flex: none; }
+.team-list { display: grid; gap: 8px; margin-top: 13px; }
+.team-list article { display: flex; align-items: center; gap: 10px; margin: 0; padding: 12px; }
+.team-list article p { display: flex; min-width: 0; flex: 1; flex-direction: column; margin: 0; }
+.team-list article b { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.team-list article small { margin-top: 3px; color: #758591; font-size: 9px; }
+.team-list article .link { display: flex; align-items: center; gap: 4px; font-size: 10px; }
+.team-list article .link svg { width: 13px; }
+.profile-edit { text-align: left; }
+.profile dl dd { max-width: 62%; overflow-wrap: anywhere; text-align: right; }
 .mobile-call { overflow: hidden; }.mobile-call>header { display: flex; align-items: center; justify-content: space-between; padding: 15px; border-bottom: 1px solid #e4eaed; }.mobile-call h2 { margin: 0; font-size: 14px; }.mobile-call header small { color: #74848f; font-size: 9px; }.mobile-call header button { min-height: 34px; border: 0; border-radius: 7px; background: #0e496f; color: #fff; font-size: 10px; font-weight: 750; }.mobile-call>div { display: flex; align-items: center; gap: 9px; padding: 12px 14px; border-bottom: 1px solid #edf1f3; }.mobile-call>div p { display: flex; min-width: 0; flex: 1; flex-direction: column; margin: 0; }.mobile-call>div b { font-size: 11px; }.mobile-call>div small { color: #758590; font-size: 9px; }.mobile-call select { max-width: 105px; height: 34px; border: 1px solid #ccd7de; border-radius: 7px; background: #fff; color: #405666; font-size: 10px; }
 .text-button { min-height: auto; margin: -4px 0 0; padding: 0; border: 0; background: transparent; color: #21688f; font-size: 12px; font-weight: 700; text-align: right; }.recovery-mobile { overflow: auto; padding-bottom: 32px; }.recovery-mobile header { display: flex; align-items: center; justify-content: space-between; }.recovery-mobile .recovery-code { font-size: 25px; letter-spacing: 3px; }.recovery-mobile > .primary { width: 100%; }.activation-input { text-align: center; font-size: 24px !important; font-weight: 800; letter-spacing: 5px; text-transform: uppercase; }
+@media (max-width: 360px) { .two-fields { grid-template-columns: 1fr; } .manager-metrics { grid-template-columns: 1fr 1fr; } .manager-metrics article:last-child { grid-column: 1 / -1; } }

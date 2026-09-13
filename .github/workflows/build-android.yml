@@ -61,5 +61,5 @@ jobs:
         run: |
           gh release view android-latest >/dev/null 2>&1 || \
             gh release create android-latest --prerelease --title "PontoNorte Android" \
-              --notes "Aplicativo Android do funcionário. Gerado automaticamente pelo GitHub Actions."
+              --notes "Aplicativo Android para funcionários, líderes e gestão. Gerado automaticamente pelo GitHub Actions."
           gh release upload android-latest PontoNorte.apk --clobber
