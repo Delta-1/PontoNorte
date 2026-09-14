@@ -1,6 +1,6 @@
 # Manual completo do PontoNorte
 
-**Versão do manual:** 1.0  
+**Versão do manual:** 1.1  
 **Público:** empresas clientes, proprietários, RH, líderes e colaboradores  
 **Plataforma:** PontoNorte — controle de ponto multiempresa
 
@@ -57,6 +57,7 @@ A visita usa a empresa fictícia **Empresa Exemplo Norte** e apresenta:
 - setores e líderes;
 - chamada;
 - jornadas;
+- banco de horas, regras de 50%/100% e calendário especial;
 - conferência;
 - ocorrências;
 - relatórios;
@@ -402,7 +403,107 @@ Depois de criar a jornada:
 
 Mudanças devem ter data e justificativa quando alterarem a regra contratual.
 
-## 14. Aba Conferência
+## 14. Aba Banco de horas
+
+A aba **Banco de horas** reúne o cálculo das horas excedentes, a classificação em 50% ou 100%, o destino definido para cada funcionário e o saldo acumulado. Ela foi desenhada para o RH conferir primeiro o resultado e abrir o detalhe somente quando necessário.
+
+### 14.1 O que o sistema calcula
+
+Para cada dia, o PontoNorte:
+
+1. identifica a meta diária da jornada do funcionário;
+2. soma o período efetivamente trabalhado;
+3. verifica se a data tem uma regra especial;
+4. se não tiver, usa a regra de dia útil, sábado, domingo ou feriado;
+5. separa hora extra 50% e hora extra 100%;
+6. encaminha o resultado para **banco de horas**, **pagamento em folha** ou **somente acompanhamento**, conforme a ficha do funcionário;
+7. registra crédito ou débito no extrato.
+
+Quando a jornada é flexível, o horário de entrada isolado não define atraso. A comparação considera o total diário configurado.
+
+### 14.2 Saldos e extrato
+
+A primeira guia mostra quatro indicadores:
+
+- saldo acumulado;
+- horas extras 50% no mês;
+- horas extras 100% no mês;
+- débitos do mês.
+
+A tabela **Resumo por colaborador** mostra destino, regra, horas 50%, horas 100%, movimento mensal e saldo total. A tabela **Extrato do período** detalha cálculos automáticos e lançamentos feitos pelo RH, sempre com data e origem.
+
+Use os filtros de mês e colaborador para investigar uma pessoa sem perder a visão geral da empresa.
+
+### 14.3 Destino das horas por funcionário
+
+Na ficha de cadastro ou edição do funcionário, escolha uma opção:
+
+| Opção | Resultado |
+|---|---|
+| Banco de horas | O crédito ou débito altera o saldo individual |
+| Pagamento em folha | A hora extra aparece como pendente de pagamento e não aumenta o banco |
+| Somente acompanhamento | O sistema classifica a jornada, mas não gera crédito nem valor a pagar |
+
+Depois, selecione a política aplicável ao funcionário. Isso permite que áreas com convenções diferentes usem regras distintas.
+
+### 14.4 Regras de cálculo
+
+Na guia **Regras de cálculo**, o RH autorizado pode criar ou editar políticas com:
+
+- percentual de dia útil;
+- percentual de sábado;
+- percentual de domingo;
+- percentual de feriado;
+- multiplicador de crédito no banco para horas 50%;
+- multiplicador de crédito no banco para horas 100%;
+- prazo de compensação em meses;
+- situação ativa ou inativa.
+
+A política inicial usa 50% em dia útil e sábado e 100% em domingo e feriado. Esses valores são um ponto de partida operacional, não substituem a conferência da convenção coletiva, do acordo e da orientação trabalhista aplicável.
+
+### 14.5 Calendário 50% / 100%
+
+A guia **Calendário 50% / 100%** cria exceções por data. Ela pode ser aplicada à empresa toda ou somente a um setor.
+
+Exemplos:
+
+- feriado municipal a 100%;
+- sábado extraordinário a 50%;
+- folga trabalhada a 100%;
+- data sem adicional;
+- evento em que todo o período trabalhado conta como extra.
+
+A regra cadastrada para uma data tem prioridade sobre a classificação semanal. Também é possível escolher se todo o trabalho do dia é extra ou somente o tempo que ultrapassar a meta.
+
+### 14.6 Ajustes manuais auditados
+
+O botão **Lançar ajuste** permite registrar:
+
+- crédito autorizado;
+- débito autorizado;
+- folga ou compensação;
+- horas pagas em folha;
+- saldo inicial.
+
+Informe colaborador, data, quantidade e motivo. O ajuste fica no extrato e não altera nem apaga as batidas originais.
+
+### 14.7 Conferência recomendada pelo RH
+
+1. confirme se a jornada e a política estão corretas na ficha;
+2. confira feriados e datas especiais;
+3. filtre o mês na aba **Banco de horas**;
+4. analise saldos negativos e movimentos incomuns;
+5. registre compensações ou pagamentos com motivo;
+6. emita **Horas extras e banco** na aba **Relatórios**;
+7. exporte em PDF para conferência ou em Excel para tratamento administrativo.
+
+### 14.8 Referência normativa
+
+No Brasil, a Constituição estabelece jornada normal de até 8 horas diárias e 44 semanais e adicional de serviço extraordinário de, no mínimo, 50%. A CLT prevê regras diferentes para compensação e banco de horas conforme o instrumento adotado. Consulte a [Constituição Federal, art. 7º, XIII e XVI](https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm) e a [CLT, art. 59](https://www.planalto.gov.br/ccivil_03/decreto-lei/del5452.htm).
+
+O PontoNorte permite parametrizar a operação, mas a empresa deve validar percentuais, prazos e critérios com seu Departamento Pessoal, convenção coletiva e assessoria responsável.
+
+## 15. Aba Conferência
 
 A conferência é a revisão dos registros antes do fechamento.
 
@@ -425,7 +526,7 @@ O líder ou RH pode confirmar a análise. O registro original continua preservad
 
 Faça uma conferência diária ou semanal e uma revisão final no fechamento do período. Deixar tudo para o último dia aumenta o risco de pendências.
 
-## 15. Aba Ocorrências
+## 16. Aba Ocorrências
 
 Ocorrências reúnem justificativas e situações que exigem análise.
 
@@ -459,7 +560,7 @@ Tipos comuns:
 
 A decisão passa a compor o relatório e a apuração. Um atestado não deve ser aprovado sem conferência conforme a política da empresa.
 
-## 16. Aba Relatórios
+## 17. Aba Relatórios
 
 A área de relatórios foi desenhada para entregar uma visão prática ao RH.
 
@@ -533,7 +634,7 @@ O relatório individual deve mostrar apenas o vínculo escolhido e respeitar as 
 
 Relatórios podem conter dados pessoais. Salve-os somente em local autorizado, controle compartilhamentos e descarte cópias conforme a política da empresa e a legislação aplicável.
 
-## 17. Aba Métodos de ponto
+## 18. Aba Métodos de ponto
 
 A empresa escolhe quais formas de registro serão aceitas.
 
@@ -559,7 +660,7 @@ Depende de equipamento compatível e integração contratada. A biometria do apa
 
 Quando a empresa exigir localização, o usuário deve autorizar a permissão no celular ou navegador. Sem a permissão, o ponto não é enviado por aquele método. A localização deve ser usada somente para a finalidade informada pela empresa.
 
-## 18. Aba Configurações
+## 19. Aba Configurações
 
 A aba contém os dados gerais da organização.
 
@@ -574,7 +675,7 @@ O código é usado no login de todos os usuários. Alterá-lo afeta os próximos
 
 Somente administradores autorizados devem editar as configurações.
 
-## 19. Aplicativo e portal do funcionário
+## 20. Aplicativo e portal do funcionário
 
 O funcionário possui uma experiência mais simples, com quatro áreas principais na barra inferior.
 
@@ -635,7 +736,7 @@ Quando o aplicativo oferecer desbloqueio por digital ou reconhecimento do própr
 
 A biometria do celular protege a sessão e não deve ser confundida com reconhecimento facial usado para validar uma marcação de ponto.
 
-## 20. Aplicativo e portal do líder
+## 21. Aplicativo e portal do líder
 
 O líder usa código da empresa, usuário e senha próprios. No celular, ele pode:
 
@@ -648,7 +749,7 @@ O líder usa código da empresa, usuário e senha próprios. No celular, ele pod
 
 O cadastro do líder é feito no painel e deve ser associado ao setor. Se ele não enxergar a equipe, o RH deve conferir perfil ativo e setor vinculado.
 
-## 21. Administração geral PontoNorte
+## 22. Administração geral PontoNorte
 
 Esta área é interna e não aparece para clientes comuns.
 
@@ -692,7 +793,7 @@ A suspensão impede o acesso operacional da empresa, mas não deve apagar seu hi
 
 Credenciais internas nunca devem ser incluídas no manual dos clientes ou enviadas em grupos.
 
-## 22. Segurança e privacidade
+## 23. Segurança e privacidade
 
 - cada pessoa deve usar conta própria;
 - não compartilhe senha ou PIN;
@@ -706,7 +807,7 @@ Credenciais internas nunca devem ser incluídas no manual dos clientes ou enviad
 - preserve os registros originais e a trilha de auditoria;
 - siga LGPD, regras trabalhistas, acordos e orientação jurídica/contábil.
 
-## 23. Rotina recomendada para o RH
+## 24. Rotina recomendada para o RH
 
 ### Todos os dias
 
@@ -734,7 +835,7 @@ Credenciais internas nunca devem ser incluídas no manual dos clientes ou enviad
 - exportar PDF resumo;
 - arquivar os arquivos em local autorizado.
 
-## 24. Sequência de implantação para uma nova empresa
+## 25. Sequência de implantação para uma nova empresa
 
 1. Cadastrar a empresa.
 2. Validar e guardar o código.
@@ -755,7 +856,7 @@ Credenciais internas nunca devem ser incluídas no manual dos clientes ou enviad
 17. Testar relatório em planilha e PDF.
 18. Orientar a equipe antes do início oficial.
 
-## 25. Solução de problemas
+## 26. Solução de problemas
 
 | Problema | Verificação recomendada |
 |---|---|
@@ -776,7 +877,7 @@ Credenciais internas nunca devem ser incluídas no manual dos clientes ou enviad
 | Credenciamento suspenso | Falar com a administração PontoNorte |
 | Esqueci o acesso | Abrir recuperação e guardar o protocolo |
 
-## 26. Roteiro rápido de treinamento
+## 27. Roteiro rápido de treinamento
 
 Para apresentar o PontoNorte a uma equipe:
 
@@ -786,12 +887,13 @@ Para apresentar o PontoNorte a uma equipe:
 4. mostre o papel do líder em **Chamada**;
 5. explique jornada flexível;
 6. percorra **Conferência** e **Ocorrências**;
-7. monte um relatório geral e um individual;
-8. apresente os formatos planilha e PDF;
-9. mostre o layout do funcionário no celular;
-10. reforce senha individual, privacidade e conferência diária.
+7. confira horas 50%, 100% e o saldo em **Banco de horas**;
+8. monte um relatório geral e um individual;
+9. apresente os formatos planilha e PDF;
+10. mostre o layout do funcionário no celular;
+11. reforce senha individual, privacidade e conferência diária.
 
-## 27. Glossário
+## 28. Glossário
 
 | Termo | Significado |
 |---|---|
@@ -800,6 +902,9 @@ Para apresentar o PontoNorte a uma equipe:
 | CBO | Classificação Brasileira de Ocupações |
 | Credenciamento | Autorização para a empresa usar a plataforma |
 | Jornada flexível | Regra baseada no total diário, sem entrada fixa |
+| Hora extra 50% / 100% | Classificação do tempo excedente conforme a regra aplicável ao dia |
+| Banco de horas | Saldo individual de créditos, débitos e compensações |
+| Política de horas extras | Conjunto de percentuais, multiplicadores e prazo de compensação |
 | Chamada | Confirmação do líder sobre a situação da equipe |
 | Conferência | Revisão dos registros antes do fechamento |
 | Ocorrência | Justificativa ou situação que exige análise |
