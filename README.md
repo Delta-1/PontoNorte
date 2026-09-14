@@ -11,6 +11,13 @@ O aplicativo não é uma página do painel. O código Android está em `mobile/`
 
 ## Acesso
 
+- **Site:** https://delta-1.github.io/PontoNorte/
+- **Manual completo:** [docs/MANUAL_COMPLETO.md](docs/MANUAL_COMPLETO.md)
+- **APK Android:** https://github.com/Delta-1/PontoNorte/releases/download/android-latest/PontoNorte.apk
+
+Na tela de login, o botão **Explorar demonstração** abre uma empresa fictícia em modo somente leitura, com tutorial em todas as abas.
+
+
 Todos os usuários entram com:
 
 1. código da empresa;
@@ -30,7 +37,8 @@ O RH cria uma senha provisória no cadastro do funcionário. A troca é obrigat�
 - localização, idempotência e trilha de auditoria;
 - justificativas e documentos;
 - relatórios exportáveis para Excel;
-- aplicativo Android com histórico e perfil.
+- aplicativo Android com histórico e perfil;
+- modo demonstração público, isolado do banco e com visita guiada.
 
 O método facial permanece bloqueado até a contratação e configuração de um fornecedor de prova de vida. Ele não é simulado.
 
