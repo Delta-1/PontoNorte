@@ -342,3 +342,74 @@
 .auth-card>small a:hover{text-decoration:underline}
 .demo-manual-link{display:inline-block;margin-top:13px;color:#21688f;font-size:11px;font-weight:750;text-decoration:none}
 .demo-manual-link:hover{text-decoration:underline}
+
+
+/* Horas extras e banco de horas */
+.overtime-employee-section{grid-column:1/-1;margin:2px 0 4px;padding:16px;border:1px solid #d9e5ec;border-radius:12px;background:#f7fafc}
+.overtime-employee-section>header{display:flex;align-items:flex-start;gap:11px;margin-bottom:14px}
+.overtime-employee-section>header svg{width:20px;color:#166b91}
+.overtime-employee-section h3{margin:0;font-size:15px;color:#17364e}
+.overtime-employee-section p,.overtime-form-note{margin:4px 0 0;color:#6a7d8c;font-size:12px;line-height:1.45}
+.overtime-employee-section .form-grid{margin:0}
+.overtime-policy-name{display:block;margin-top:3px;color:#718392;font-size:11px}
+.time-bank-tabs{display:flex;gap:8px;margin:0 0 18px;padding:5px;width:max-content;max-width:100%;overflow-x:auto;border:1px solid #dce4e9;border-radius:13px;background:#fff}
+.time-bank-tabs button{display:flex;align-items:center;gap:8px;white-space:nowrap;padding:10px 14px;border:0;border-radius:9px;background:transparent;color:#647686;font-weight:650;cursor:pointer}
+.time-bank-tabs button svg{width:17px}
+.time-bank-tabs button.active{background:#0d3558;color:#fff;box-shadow:0 5px 16px rgba(13,53,88,.18)}
+.time-bank-filter{display:flex;align-items:end;gap:14px;padding:18px;margin-bottom:18px}
+.time-bank-filter label{display:grid;gap:6px;min-width:210px;color:#4d6272;font-size:12px;font-weight:650}
+.time-bank-filter button{margin-left:auto}
+.time-bank-metrics{margin-bottom:18px}
+.time-bank-section-head{display:flex;justify-content:space-between;align-items:center;padding:19px 22px;border-bottom:1px solid #e5eaee}
+.time-bank-section-head h2,.time-bank-calendar-head h2{margin:0 0 4px;font-size:16px}
+.time-bank-section-head p,.time-bank-calendar-head p{margin:0;color:#71818e;font-size:13px}
+.positive-balance{color:#167451}
+.negative-balance{color:#b7592d}
+.time-bank-explainer{display:flex;gap:14px;padding:20px;margin-bottom:18px;background:linear-gradient(115deg,#f4f9fc,#fff)}
+.time-bank-explainer>svg{flex:0 0 auto;width:25px;color:#167451}
+.time-bank-explainer h2{margin:0 0 5px;font-size:16px}
+.time-bank-explainer p{margin:0;max-width:850px;color:#607483;line-height:1.55}
+.time-bank-policy-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px}
+.overtime-policy-card{padding:20px}
+.overtime-policy-card>header{display:flex;justify-content:space-between;align-items:center}
+.overtime-policy-card>header>span{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:#e8f2f7;color:#16587d}
+.overtime-policy-card h2{margin:16px 0 12px;font-size:17px}
+.overtime-policy-card>div{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.overtime-policy-card>div span{padding:10px 6px;text-align:center;border-radius:9px;background:#f3f6f8}
+.overtime-policy-card>div small{display:block;color:#748491;font-size:10px}
+.overtime-policy-card>div b{display:block;margin-top:3px;color:#153b58;font-size:16px}
+.overtime-policy-card>p{margin:14px 0;color:#6a7b88;font-size:12px;line-height:1.5}
+.time-bank-add-policy{margin-top:16px}
+.time-bank-calendar-head{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:20px;margin-bottom:18px}
+.check-line{display:flex!important;align-items:center;gap:9px;color:#385268!important}
+.check-line input{width:17px;height:17px;accent-color:#0d5a7f}
+.overtime-report-strip{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:18px 22px;margin:0 0 18px}
+.overtime-report-strip>header{display:flex;align-items:center;gap:11px;min-width:225px}
+.overtime-report-strip>header>svg{width:22px;color:#17678d}
+.overtime-report-strip h2{margin:0 0 3px;font-size:15px}
+.overtime-report-strip p{margin:0;color:#73838f;font-size:11px}
+.overtime-report-strip>div{display:grid;grid-template-columns:repeat(4,minmax(110px,1fr));gap:9px;flex:1}
+.overtime-report-strip article{padding:11px 13px;border-radius:10px;background:#f3f7f9}
+.overtime-report-strip small{display:block;color:#73828e;font-size:10px}
+.overtime-report-strip b{display:block;margin-top:3px;font-size:16px}
+.employee-web-profile dd.positive-balance,.employee-web-profile dd.negative-balance{font-weight:750}
+@media(max-width:800px){
+  .time-bank-tabs{width:100%;border-radius:12px}
+  .time-bank-tabs button{flex:1;justify-content:center;padding:9px 11px;font-size:12px}
+  .time-bank-filter{display:grid;grid-template-columns:1fr;padding:15px}
+  .time-bank-filter label{min-width:0}
+  .time-bank-filter button{width:100%;margin:0}
+  .time-bank-policy-grid{grid-template-columns:1fr}
+  .time-bank-calendar-head{align-items:flex-start;flex-direction:column}
+  .time-bank-calendar-head button{width:100%}
+  .overtime-report-strip{display:block}
+  .overtime-report-strip>header{margin-bottom:13px}
+  .overtime-report-strip>div{grid-template-columns:1fr 1fr}
+}
+@media(max-width:520px){
+  .time-bank-tabs button{font-size:0}
+  .time-bank-tabs button svg{width:20px}
+  .overtime-policy-card>div{grid-template-columns:1fr 1fr}
+  .overtime-report-strip>div{grid-template-columns:1fr}
+  .overtime-employee-section{padding:13px}
+}

@@ -11,6 +11,8 @@ type CreateUserBody = {
   organization_id: string;
   department_id?: string | null;
   schedule_id?: string | null;
+  overtime_mode?: "disabled" | "bank" | "pay";
+  overtime_policy_id?: string | null;
   role?: "company_owner" | "hr_admin" | "hr_agent" | "manager" | "employee";
   username?: string;
   password?: string;
@@ -69,7 +71,7 @@ Deno.serve(async (req) => {
     const action = body.action ?? "create";
     if (action !== "create") {
       if (!body.employee_id) return json({ error: "Funcionário obrigatório." }, 400);
-      const { data: target } = await admin.from("employees").select("id,auth_user_id,department_id,full_name,username,personal_qr_token").eq("id",body.employee_id).eq("organization_id",body.organization_id).single();
+      const { data: target } = await admin.from("employees").select("id,auth_user_id,department_id,full_name,username,personal_qr_token,overtime_mode,overtime_policy_id").eq("id",body.employee_id).eq("organization_id",body.organization_id).single();
       if (!target) return json({ error: "Funcionário não encontrado." }, 404);
       const isSelfProfileUpdate = action === "update" && target.auth_user_id === userData.user.id;
       if (!creator && !isSelfProfileUpdate) return json({ error: "Você não pode alterar este funcionário." }, 403);
@@ -106,6 +108,8 @@ Deno.serve(async (req) => {
           employee_code: body.employee_code?.trim(),
           department_id: body.department_id ?? null,
           schedule_id: body.schedule_id ?? null,
+          overtime_mode: body.overtime_mode ?? target.overtime_mode ?? "bank",
+          overtime_policy_id: body.overtime_policy_id ?? target.overtime_policy_id ?? null,
           cpf,
           birth_date: body.birth_date || null,
           gender: body.gender || null,
@@ -129,7 +133,7 @@ Deno.serve(async (req) => {
           if (!/^\d{6}$/.test(body.pin)) return json({ error: "O PIN deve ter seis números." }, 400);
           await admin.from("employee_secrets").update({ pin_hash: await hashPin(body.pin), failed_attempts: 0, locked_until: null, updated_at: new Date().toISOString() }).eq("employee_id", target.id);
         }
-        await admin.from("audit_logs").insert({organization_id:body.organization_id,actor_user_id:userData.user.id,action:isSelfProfileUpdate?"employee.profile_updated":"employee.updated",entity_type:"employee",entity_id:target.id,after_data:{cbo_code:cboCode,job_title:updates.job_title}});
+        await admin.from("audit_logs").insert({organization_id:body.organization_id,actor_user_id:userData.user.id,action:isSelfProfileUpdate?"employee.profile_updated":"employee.updated",entity_type:"employee",entity_id:target.id,after_data:{cbo_code:cboCode,job_title:updates.job_title,overtime_mode:updates.overtime_mode,overtime_policy_id:updates.overtime_policy_id}});
         return json({ employee: updated });
       }
       if (!body.status) return json({ error: "Situação obrigatória." }, 400);
@@ -187,6 +191,8 @@ Deno.serve(async (req) => {
       auth_user_id: created.user.id,
       department_id: body.department_id ?? null,
       schedule_id: body.schedule_id ?? null,
+      overtime_mode: body.overtime_mode ?? "bank",
+      overtime_policy_id: body.overtime_policy_id ?? null,
       username,
       employee_code: body.employee_code,
       full_name: body.full_name,
