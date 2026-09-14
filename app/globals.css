@@ -337,3 +337,8 @@
   .demo-welcome-grid svg{grid-row:1/3;margin:0}
   .demo-welcome-grid span{margin-top:1px}
 }
+
+.auth-card>small a{color:#21688f;font-weight:700;text-decoration:none}
+.auth-card>small a:hover{text-decoration:underline}
+.demo-manual-link{display:inline-block;margin-top:13px;color:#21688f;font-size:11px;font-weight:750;text-decoration:none}
+.demo-manual-link:hover{text-decoration:underline}
