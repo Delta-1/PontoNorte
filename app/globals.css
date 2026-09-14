@@ -56,3 +56,149 @@
 /* Utilidades mantidas explicitamente no CSS final para rolagem acessível. */
 .responsive-table,.report-table-scroll,.employee-web-app{scrollbar-width:thin;scrollbar-gutter:stable}.scrollbar-none{scrollbar-width:none}.scroll-fade{mask-image:linear-gradient(to bottom,transparent,#000 12px,#000 calc(100% - 12px),transparent);animation:scroll-fade-reveal-b 1ms ease-in-out}.shimmer{animation:tw-shimmer 2s linear infinite}@keyframes scroll-fade-reveal-b{from{--scroll-fade-b:0px}to{--scroll-fade-b:12px}}@keyframes tw-shimmer{to{background-position:200% 0}}
 .web-native-reader{position:relative;display:grid;min-height:300px;place-items:center;overflow:hidden;border-radius:13px;background:#0a2032}.web-native-reader video{width:100%;min-height:300px;object-fit:cover}.web-native-reader>span{position:absolute;display:grid;width:235px;height:235px;place-items:center;border:2px solid #65d59b;border-radius:22px;box-shadow:0 0 0 999px #07172466}.web-native-reader>span svg{width:32px;color:#65d59b;opacity:.7}
+
+
+/* Cadastro de funcionário — janela estável no desktop e no celular */
+.employee-dialog{
+  display:grid!important;
+  width:min(760px,calc(100vw - 32px))!important;
+  max-width:760px!important;
+  max-height:min(820px,calc(100dvh - 32px))!important;
+  grid-template-rows:auto minmax(0,1fr);
+  padding:0!important;
+  overflow:hidden!important;
+  border-radius:18px!important;
+  background:#fff;
+  box-shadow:0 24px 70px #0b2e4c33!important;
+}
+.employee-dialog-head{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  align-items:center;
+  gap:13px;
+  padding:21px 54px 18px 24px;
+  border-bottom:1px solid #e3e9ed;
+  background:linear-gradient(180deg,#fbfdfe 0%,#f6f9fb 100%);
+  text-align:left;
+}
+.employee-dialog-head>div{min-width:0}
+.employee-dialog-head h2{margin:0;color:#17384f;font-size:20px;line-height:1.2}
+.employee-dialog-head p{max-width:590px;margin:5px 0 0;color:#6e7e89;font-size:12px;line-height:1.45}
+.employee-dialog-icon{
+  display:grid;
+  width:43px;
+  height:43px;
+  place-items:center;
+  border-radius:12px;
+  background:#e4f0f6;
+  color:#155c87;
+}
+.employee-dialog-icon svg{width:21px}
+.employee-dialog-form{
+  display:grid;
+  min-height:0;
+  grid-template-rows:minmax(0,1fr) auto auto;
+  overflow:hidden;
+}
+.employee-dialog-scroll{
+  min-height:0;
+  padding:18px 24px 8px;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+.employee-form-section{
+  padding:17px;
+  border:1px solid #e0e7eb;
+  border-radius:13px;
+  background:#fff;
+}
+.employee-form-section+.employee-form-section{margin-top:13px}
+.employee-form-section>header{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:14px;
+}
+.employee-form-section>header>span{
+  display:grid;
+  width:28px;
+  height:28px;
+  flex:none;
+  place-items:center;
+  border-radius:50%;
+  background:#165d88;
+  color:#fff;
+  font-size:11px;
+  font-weight:800;
+}
+.employee-form-section>header>div{display:flex;min-width:0;flex-direction:column}
+.employee-form-section>header b{color:#1b3a50;font-size:13px}
+.employee-form-section>header small{margin-top:2px;color:#778691;font-size:10px;line-height:1.35}
+.employee-form-section .form-grid{gap:13px}
+.employee-form-section label{
+  display:flex;
+  min-width:0;
+  flex-direction:column;
+  gap:6px;
+  color:#4f6170;
+  font-size:11px;
+  font-weight:700;
+}
+.employee-form-section input,.employee-form-section select{
+  width:100%;
+  min-width:0;
+  height:42px;
+  font-size:13px;
+}
+.employee-form-section input:focus,.employee-form-section select:focus{
+  border-color:#3c82a8;
+  box-shadow:0 0 0 3px #2b789f18;
+}
+.employee-dialog-form>.form-error{margin:8px 24px 0}
+.employee-dialog-actions{
+  display:flex!important;
+  align-items:center;
+  justify-content:flex-end!important;
+  gap:9px;
+  margin:0!important;
+  padding:14px 24px max(14px,env(safe-area-inset-bottom));
+  border-top:1px solid #e3e9ed;
+  background:#fff;
+}
+.employee-dialog-actions button{min-width:142px}
+
+@media(max-width:700px){
+  .employee-dialog{
+    inset:auto!important;
+    top:50%!important;
+    left:50%!important;
+    width:calc(100vw - 16px)!important;
+    max-width:none!important;
+    max-height:calc(100dvh - 16px)!important;
+    transform:translate(-50%,-50%)!important;
+    border-radius:17px!important;
+  }
+  .employee-dialog-head{gap:10px;padding:16px 48px 14px 16px}
+  .employee-dialog-head h2{font-size:18px}
+  .employee-dialog-head p{font-size:11px}
+  .employee-dialog-icon{width:38px;height:38px;border-radius:10px}
+  .employee-dialog-scroll{padding:12px 12px 6px;scroll-padding-bottom:84px}
+  .employee-form-section{padding:14px 12px;border-radius:12px}
+  .employee-form-section .form-grid{grid-template-columns:1fr}
+  .employee-form-section .full-row{grid-column:auto}
+  .employee-form-section input,.employee-form-section select{height:44px;font-size:16px}
+  .employee-dialog-form>.form-error{margin:7px 12px 0}
+  .employee-dialog-actions{
+    display:grid!important;
+    grid-template-columns:1fr 1.35fr;
+    padding:11px 12px max(11px,env(safe-area-inset-bottom));
+  }
+  .employee-dialog-actions button{width:100%;min-width:0;min-height:44px}
+}
+@media(max-width:370px){
+  .employee-dialog-head p{display:none}
+  .employee-dialog-actions{grid-template-columns:1fr}
+  .employee-dialog-actions button:first-child{order:2}
+}
