@@ -173,7 +173,7 @@ function Employees({ctx}:{ctx:Context}){
       <section className="employee-form-section">
         <header><span>1</span><div><b>Identificação</b><small>Dados básicos para localizar o colaborador.</small></div></header>
         <div className="form-grid employee-form">
-          <label>Nome completo<Input autoFocus autoComplete="name" required value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/></label>
+          <label>Nome completo<Input autoComplete="name" required value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/></label>
           <label>CPF<Input required inputMode="numeric" maxLength={14} placeholder="000.000.000-00" value={form.cpf} onChange={e=>setForm({...form,cpf:e.target.value})}/></label>
           <label>Matrícula<Input required value={form.employee_code} onChange={e=>setForm({...form,employee_code:e.target.value})}/></label>
           <label>Usuário<Input required autoCapitalize="none" autoComplete="username" value={form.username} onChange={e=>setForm({...form,username:e.target.value.toLowerCase()})}/></label>
