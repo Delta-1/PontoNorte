@@ -1,6 +1,6 @@
 # Manual completo do PontoNorte
 
-**Versão do manual:** 1.1  
+**Versão do manual:** 1.2  
 **Público:** empresas clientes, proprietários, RH, líderes e colaboradores  
 **Plataforma:** PontoNorte — controle de ponto multiempresa
 
@@ -269,6 +269,33 @@ Fluxo esperado:
 6. o sistema valida empresa, usuário, método e registro.
 
 Não publique o QR em local aberto. Se houver suspeita de uso indevido, gere um novo código e invalide o anterior.
+
+
+### 8.8 Ficha de empregado no modelo cadastral
+
+A ação **Ficha completa** abre o Registro de Empregado vinculado ao colaborador. O preenchimento é dividido em cinco etapas:
+
+1. identificação e residência;
+2. documentos;
+3. dados pessoais e trabalho;
+4. PIS e domicílio bancário;
+5. históricos e observações.
+
+Os dados já existentes no cadastro, como nome, CPF, telefone, nascimento, cargo, CBO, admissão, jornada e desligamento, são reaproveitados automaticamente. O RH completa os demais campos do modelo.
+
+A ficha inclui os blocos do documento fornecido pela empresa: empregador, matrícula eSocial, número do registro, beneficiários, filiação, documentos, CTPS, título eleitoral, CNH, dados militares, deficiência, salário, horário, FGTS, PIS, banco, alterações salariais, férias, advertências, acidentes, rescisão, contribuição sindical e observações.
+
+### 8.9 Salvar e exportar a ficha
+
+1. abra **Funcionários**;
+2. localize a pessoa;
+3. selecione **Ficha completa**;
+4. percorra as etapas e preencha os campos;
+5. use **Salvar ficha**;
+6. selecione **Exportar PDF preenchido**.
+
+O arquivo é gerado em A4 seguindo a organização visual do Registro de Empregado enviado. Cada funcionário possui sua própria ficha e o documento original usado como referência não fica público no sistema.
+
 
 ## 9. Aba Dispositivos
 
@@ -564,7 +591,7 @@ A decisão passa a compor o relatório e a apuração. Um atestado não deve ser
 
 A área de relatórios foi desenhada para entregar uma visão prática ao RH.
 
-### 16.1 Tipos de relatório
+### 17.1 Tipos de relatório
 
 A disponibilidade depende da versão, mas a plataforma pode apresentar:
 
@@ -580,21 +607,18 @@ A disponibilidade depende da versão, mas a plataforma pode apresentar:
 - chamadas por setor;
 - dados de um colaborador específico.
 
-### 16.2 Selecionar período e colaborador
+### 17.2 Assistente guiado de relatório
 
-1. Abra **Relatórios**.
-2. Escolha o tipo.
-3. Informe a data inicial.
-4. Informe a data final.
-5. Escolha:
-   - **Geral/Todos os colaboradores**; ou
-   - um colaborador específico.
-6. Aplique os filtros.
-7. Revise a prévia em tabela.
+Ao selecionar um tipo de relatório, o sistema abre uma janela em quatro etapas:
 
-Use intervalos menores quando quiser investigar uma ocorrência e intervalos completos para fechamento.
+1. **Tipo:** escolha resumo, geral, presença, faltas, registros, horas extras, funcionários ou ficha de empregado.
+2. **Escopo:** escolha todos os colaboradores ou uma pessoa específica.
+3. **Detalhes:** selecione o funcionário e, quando necessário, a data inicial e final.
+4. **Revisão:** confira tipo, escopo, período e formato antes de montar.
 
-### 16.3 Relatório em planilha
+A opção **Nova consulta** reabre o assistente a qualquer momento. Depois de montar a consulta, a prévia aparece em tabela e pode ser exportada. Use intervalos menores para investigar ocorrências e intervalos completos para fechamento.
+
+### 17.3 Relatório em planilha
 
 Escolha **Planilha** para obter dados tabulares destinados a conferência, cálculos e importação. A planilha é adequada para:
 
@@ -606,7 +630,7 @@ Escolha **Planilha** para obter dados tabulares destinados a conferência, cálc
 
 Abra o arquivo e confirme período, empresa, filtros e quantidade de linhas.
 
-### 16.4 Resumo em PDF
+### 17.4 Resumo em PDF
 
 Escolha **PDF resumo** para uma apresentação legível e pronta para compartilhamento ou arquivo. Ele deve destacar:
 
@@ -618,7 +642,7 @@ Escolha **PDF resumo** para uma apresentação legível e pronta para compartilh
 - ocorrências relevantes;
 - data de emissão.
 
-### 16.5 Relatório individual
+### 17.5 Relatório individual
 
 Para analisar uma pessoa:
 
@@ -630,7 +654,11 @@ Para analisar uma pessoa:
 
 O relatório individual deve mostrar apenas o vínculo escolhido e respeitar as permissões do usuário.
 
-### 16.6 Cuidados com os arquivos
+### 17.6 Ficha cadastral pelo relatório
+
+Selecione **Ficha de empregado** no assistente. O escopo individual será obrigatório. Depois de escolher a pessoa, a plataforma abre a mesma ficha disponível na aba **Funcionários**, permitindo conferir, completar, salvar e gerar o PDF preenchido.
+
+### 17.7 Cuidados com os arquivos
 
 Relatórios podem conter dados pessoais. Salve-os somente em local autorizado, controle compartilhamentos e descarte cópias conforme a política da empresa e a legislação aplicável.
 
