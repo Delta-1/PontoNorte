@@ -246,3 +246,11 @@ button, input, select, textarea { font: inherit; }
 .admin-nav button span{font-size:8px}
 .admin-web-link{margin-top:18px;text-decoration:none}
 .team-list .avatar svg{width:18px;height:18px}
+
+
+/* Controle acessível para mostrar ou ocultar senhas e PINs */
+.password-control{position:relative;display:block;width:100%}
+.password-control input{width:100%;padding-right:48px!important}
+.password-control>button{position:absolute;top:50%;right:6px;display:grid;width:38px;height:38px;place-items:center;transform:translateY(-50%);border:0;border-radius:10px;background:transparent;color:#526b7b;-webkit-tap-highlight-color:transparent}
+.password-control>button:active{background:#e7f0f5;color:#0d5d87}
+.password-control>button svg{width:19px;height:19px}
