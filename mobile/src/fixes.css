@@ -246,3 +246,35 @@ button, input, select, textarea { font: inherit; }
 .admin-nav button span{font-size:8px}
 .admin-web-link{margin-top:18px;text-decoration:none}
 .team-list .avatar svg{width:18px;height:18px}
+
+
+/* Controle acessível para mostrar ou ocultar senhas e PINs */
+.password-control{position:relative;display:block;width:100%}
+.password-control input{width:100%;padding-right:48px!important}
+.password-control>button{position:absolute;top:50%;right:6px;display:grid;width:38px;height:38px;place-items:center;transform:translateY(-50%);border:0;border-radius:10px;background:transparent;color:#526b7b;-webkit-tap-highlight-color:transparent}
+.password-control>button:active{background:#e7f0f5;color:#0d5d87}
+.password-control>button svg{width:19px;height:19px}
+
+
+/* Mantém o cadastro de funcionário dentro da tela e estável com o teclado */
+.mobile-form-backdrop{
+  width:100vw;
+  height:100vh;
+  height:100dvh;
+  overflow:hidden;
+  align-items:center;
+}
+.mobile-employee-sheet{
+  width:min(100%,460px);
+  height:min(760px,calc(100vh - 16px));
+  height:min(760px,calc(100dvh - 16px));
+  max-height:none;
+  margin:auto;
+}
+.mobile-employee-form-body{-webkit-overflow-scrolling:touch;scroll-padding-block:16px 104px}
+.mobile-employee-form-body input,.mobile-employee-form-body select{scroll-margin-block:82px}
+@media(max-height:600px){
+  .mobile-employee-sheet-head{padding-top:10px;padding-bottom:10px}
+  .mobile-employee-sheet-head p{display:none}
+  .mobile-employee-form-body{padding-top:8px}
+}

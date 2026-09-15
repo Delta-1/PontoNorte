@@ -538,3 +538,39 @@
 .demo-report-wizard{padding:22px 0;margin-bottom:18px}
 .demo-report-wizard .report-wizard-progress{margin-bottom:4px}
 @media(max-width:520px){.demo-report-wizard{margin-left:-2px;margin-right:-2px}}
+
+
+/* Controle acessível para mostrar ou ocultar senhas e PINs */
+.password-control{position:relative;display:block;width:100%}
+.password-control input{width:100%;padding-right:48px!important}
+.password-control>button{position:absolute;top:50%;right:7px;display:grid;width:36px;height:36px;place-items:center;transform:translateY(-50%);border:0;border-radius:9px;background:transparent;color:#526b7b;cursor:pointer}
+.password-control>button:hover{background:#eaf2f6;color:#0d5d87}
+.password-control>button:focus-visible{outline:2px solid #2f7aa5;outline-offset:1px}
+.password-control>button svg{width:18px;height:18px}
+
+
+/* Mantém o cadastro de funcionário integralmente dentro da área visível */
+.employee-dialog{
+  top:50%!important;
+  left:50%!important;
+  width:min(760px,calc(100vw - 32px))!important;
+  height:min(820px,calc(100vh - 32px))!important;
+  height:min(820px,calc(100dvh - 32px))!important;
+  max-height:none!important;
+  margin:0!important;
+  transform:translate(-50%,-50%)!important;
+}
+.employee-dialog-scroll{-webkit-overflow-scrolling:touch;scroll-padding-block:18px 96px}
+.employee-dialog-scroll input,.employee-dialog-scroll select{scroll-margin-block:90px}
+@media(max-width:700px){
+  .employee-dialog{
+    width:calc(100vw - 16px)!important;
+    height:calc(100vh - 16px)!important;
+    height:calc(100dvh - 16px)!important;
+  }
+}
+@media(max-height:600px){
+  .employee-dialog-head{padding-top:10px;padding-bottom:10px}
+  .employee-dialog-head p{display:none}
+  .employee-dialog-scroll{padding-top:8px}
+}
