@@ -538,3 +538,12 @@
 .demo-report-wizard{padding:22px 0;margin-bottom:18px}
 .demo-report-wizard .report-wizard-progress{margin-bottom:4px}
 @media(max-width:520px){.demo-report-wizard{margin-left:-2px;margin-right:-2px}}
+
+
+/* Controle acessível para mostrar ou ocultar senhas e PINs */
+.password-control{position:relative;display:block;width:100%}
+.password-control input{width:100%;padding-right:48px!important}
+.password-control>button{position:absolute;top:50%;right:7px;display:grid;width:36px;height:36px;place-items:center;transform:translateY(-50%);border:0;border-radius:9px;background:transparent;color:#526b7b;cursor:pointer}
+.password-control>button:hover{background:#eaf2f6;color:#0d5d87}
+.password-control>button:focus-visible{outline:2px solid #2f7aa5;outline-offset:1px}
+.password-control>button svg{width:18px;height:18px}
