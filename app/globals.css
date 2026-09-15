@@ -534,3 +534,7 @@
   .employee-record-form>footer>div{display:grid;grid-template-columns:1fr}
   .employee-record-form>footer button{width:100%}
 }
+
+.demo-report-wizard{padding:22px 0;margin-bottom:18px}
+.demo-report-wizard .report-wizard-progress{margin-bottom:4px}
+@media(max-width:520px){.demo-report-wizard{margin-left:-2px;margin-right:-2px}}
