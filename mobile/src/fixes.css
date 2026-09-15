@@ -233,3 +233,16 @@ button, input, select, textarea { font: inherit; }
 @media(prefers-reduced-motion:reduce){
   .mobile-form-backdrop,.mobile-employee-sheet{animation:none}
 }
+
+
+/* Sessão persistente, desbloqueio local e navegação do administrador geral */
+.remember-row{display:flex;align-items:flex-start;gap:11px;padding:12px 13px;border:1px solid #d6e0e6;border-radius:11px;background:#f8fbfc;color:#29495f}
+.remember-row input{width:19px;height:19px;margin-top:2px;accent-color:#0d5f89}
+.remember-row span{display:grid;gap:3px}
+.remember-row b{font-size:13px}
+.remember-row small{color:#657b89;font-size:11px;line-height:1.4}
+.fluid-nav{--nav-count:4;grid-template-columns:repeat(var(--nav-count),1fr)}
+.fluid-nav .nav-fluid-highlight{width:calc((100% - 10px)/var(--nav-count))}
+.admin-nav button span{font-size:8px}
+.admin-web-link{margin-top:18px;text-decoration:none}
+.team-list .avatar svg{width:18px;height:18px}
