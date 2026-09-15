@@ -35,13 +35,14 @@ export function EmployeeRecordDialog({open,onOpenChange,organization,employee,sc
     if(!open||!employee?.id)return;
     let active=true;setLoading(true);setMessage("");setSectionIndex(0);
     const defaults=employeeRecordDefaults(employee,organization,schedule);
-    supabase.from("employee_records").select("*").eq("employee_id",employee.id).eq("template_key","registro_empregado_br").maybeSingle()
-      .then(({data:record,error})=>{
-        if(!active)return;
-        if(error){setMessage("Não foi possível carregar a ficha: "+error.message);setData(defaults)}
-        else if(record){setRecordId(record.id);setRecordNumber(record.record_number||"");setEsocialRegistration(record.esocial_registration||"");setData({...defaults,...(record.data||{})})}
-        else{setRecordId("");setRecordNumber(employee.employee_code||"");setEsocialRegistration("");setData(defaults)}
-      }).finally(()=>active&&setLoading(false));
+    void(async()=>{
+      const{data:record,error}=await supabase.from("employee_records").select("*").eq("employee_id",employee.id).eq("template_key","registro_empregado_br").maybeSingle();
+      if(!active)return;
+      if(error){setMessage("Não foi possível carregar a ficha: "+error.message);setData(defaults)}
+      else if(record){setRecordId(record.id);setRecordNumber(record.record_number||"");setEsocialRegistration(record.esocial_registration||"");setData({...defaults,...(record.data||{})})}
+      else{setRecordId("");setRecordNumber(employee.employee_code||"");setEsocialRegistration("");setData(defaults)}
+      setLoading(false);
+    })();
     return()=>{active=false};
   },[employee?.id,open,organization,schedule]);
 
