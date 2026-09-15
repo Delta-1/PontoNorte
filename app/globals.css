@@ -413,3 +413,124 @@
   .overtime-report-strip>div{grid-template-columns:1fr}
   .overtime-employee-section{padding:13px}
 }
+
+
+/* Ficha de empregado e relatórios guiados */
+.report-head-actions{display:flex;align-items:center;gap:9px}
+.report-current-query{display:flex;align-items:center;gap:22px;padding:16px 20px;margin-bottom:18px}
+.report-current-query>div{display:flex;align-items:center;gap:11px;min-width:235px}
+.report-current-query>div>span{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:#eaf3f7;color:#145a7e}
+.report-current-query>div p{display:grid;margin:0}
+.report-current-query>div small{font-size:9px;letter-spacing:.08em;color:#788895}
+.report-current-query>div b{font-size:14px}
+.report-current-query dl{display:flex;gap:28px;flex:1;margin:0}
+.report-current-query dl div{display:grid;gap:2px}
+.report-current-query dt{font-size:10px;color:#748592}
+.report-current-query dd{margin:0;font-size:13px;font-weight:700;color:#29475d}
+.report-wizard-dialog{width:min(760px,calc(100vw - 28px));max-width:760px;max-height:min(88vh,820px);overflow:auto;padding:0;border-radius:18px}
+.report-wizard-dialog>[data-slot="dialog-header"]{padding:24px 26px 12px}
+.report-wizard-progress{height:5px;margin:0 26px;background:#e8edf0;border-radius:99px;overflow:hidden}
+.report-wizard-progress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#0c5278,#1a8d8a);transition:width .28s ease}
+.report-wizard-step-label{display:flex;align-items:end;justify-content:space-between;padding:18px 26px 12px}
+.report-wizard-step-label small{font-size:10px;letter-spacing:.08em;color:#728390}
+.report-wizard-step-label b{font-size:17px;color:#19384f}
+.report-wizard-kinds{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 26px}
+.report-wizard-kinds button,.report-wizard-scope button{display:flex;align-items:center;gap:11px;position:relative;padding:14px;text-align:left;border:1px solid #dce5ea;border-radius:12px;background:#fff;color:#304e64;cursor:pointer;transition:.18s ease}
+.report-wizard-kinds button:hover,.report-wizard-scope button:hover{border-color:#83a9bc;transform:translateY(-1px)}
+.report-wizard-kinds button.active,.report-wizard-scope button.active{border-color:#176c91;background:#f0f8fb;box-shadow:0 0 0 2px rgba(23,108,145,.09)}
+.report-wizard-kinds button>svg:first-child,.report-wizard-scope button>svg:first-child{flex:0 0 auto;width:22px;color:#176489}
+.report-wizard-kinds button>svg:last-child{position:absolute;right:10px;top:10px;width:16px;color:#16815c}
+.report-wizard-kinds span,.report-wizard-scope span{display:grid;gap:3px}
+.report-wizard-kinds b,.report-wizard-scope b{font-size:13px}
+.report-wizard-kinds small,.report-wizard-scope small{max-width:270px;font-size:10px;line-height:1.35;color:#72828e}
+.report-wizard-scope{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:20px 26px}
+.report-wizard-scope button{min-height:110px}
+.report-wizard-scope button:disabled{opacity:.42;cursor:not-allowed;transform:none}
+.report-wizard-details{display:grid;gap:16px;padding:12px 26px 22px}
+.report-wizard-details>label,.report-wizard-dates label{display:grid;gap:7px;font-size:12px;font-weight:700;color:#3d596d}
+.report-wizard-details select{height:42px;padding:0 12px;border:1px solid #d7e0e6;border-radius:9px;background:#fff}
+.report-wizard-details .period-shortcuts{margin:0}
+.report-wizard-dates{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.report-wizard-review{display:grid;place-items:center;padding:12px 26px 22px;text-align:center}
+.report-wizard-review>span{display:grid;place-items:center;width:48px;height:48px;margin-bottom:10px;border-radius:50%;background:#e5f6ee;color:#147252}
+.report-wizard-review>span svg{width:25px}
+.report-wizard-review h2{margin:0 0 16px;font-size:18px}
+.report-wizard-review dl{width:min(100%,520px);margin:0;border:1px solid #e0e7eb;border-radius:12px;overflow:hidden;text-align:left}
+.report-wizard-review dl div{display:grid;grid-template-columns:120px 1fr;gap:12px;padding:10px 13px;border-bottom:1px solid #e9eef1}
+.report-wizard-review dl div:last-child{border-bottom:0}
+.report-wizard-review dt{color:#71818d;font-size:11px}
+.report-wizard-review dd{margin:0;font-size:12px;font-weight:700}
+.report-wizard-actions{display:flex;align-items:center;gap:10px;padding:16px 26px 22px;margin-top:10px;border-top:1px solid #e7ecef}
+.report-wizard-actions>small{flex:1;text-align:center;color:#81909a;font-size:10px}
+.employee-record-dialog{width:min(980px,calc(100vw - 24px));max-width:980px;max-height:92vh;overflow:auto;padding:0;border-radius:18px}
+.employee-record-dialog>[data-slot="dialog-header"]{padding:22px 26px 10px}
+.employee-record-title{display:flex;align-items:center;gap:12px}
+.employee-record-title>span{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:#eaf3f7;color:#145d81}
+.employee-record-title>span svg{width:22px}
+.employee-record-security{display:flex;align-items:center;gap:10px;margin:0 26px 14px;padding:10px 13px;border:1px solid #d8e9e3;border-radius:10px;background:#f3faf7;color:#2d5b4a}
+.employee-record-security>svg{width:19px}
+.employee-record-security p{display:grid;margin:0}
+.employee-record-security b{font-size:11px}
+.employee-record-security small{font-size:9px;color:#668075}
+.employee-record-progress{height:4px;margin:0 26px;background:#e8edf0;border-radius:99px;overflow:hidden}
+.employee-record-progress span{display:block;height:100%;background:linear-gradient(90deg,#0c5278,#1b8b86);transition:width .25s}
+.employee-record-steps{display:flex;gap:5px;padding:13px 26px;overflow-x:auto}
+.employee-record-steps button{display:flex;align-items:center;gap:6px;min-width:max-content;padding:7px 9px;border:0;border-radius:8px;background:#f2f5f7;color:#71818d;cursor:pointer}
+.employee-record-steps button span{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#dfe6ea;font-size:10px;font-weight:800}
+.employee-record-steps button small{font-size:10px}
+.employee-record-steps button.active{background:#e9f3f7;color:#135a7e}
+.employee-record-steps button.active span,.employee-record-steps button.done span{background:#17678c;color:#fff}
+.employee-record-form{padding:4px 26px 24px}
+.employee-record-form>header{display:flex;align-items:end;justify-content:space-between;margin:8px 0 16px}
+.employee-record-form>header small{font-size:9px;letter-spacing:.08em;color:#788995}
+.employee-record-form>header h2{margin:3px 0 0;font-size:18px}
+.employee-record-form>header>span{font-size:12px;font-weight:750;color:#17678c}
+.employee-record-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.employee-record-fields+ .employee-record-fields{margin-top:12px}
+.employee-record-fields label{display:grid;align-content:start;gap:6px;font-size:11px;font-weight:700;color:#425e70}
+.employee-record-fields textarea{width:100%;min-height:74px;padding:10px 11px;resize:vertical;border:1px solid #d6dfe5;border-radius:9px;background:#fff;font:inherit;font-weight:450;color:#1d3445}
+.employee-record-fields textarea:focus{outline:2px solid rgba(24,104,143,.18);border-color:#3d88aa}
+.employee-record-fields textarea:disabled{background:#f5f7f8;color:#697985}
+.employee-record-fields .record-wide{grid-column:span 3}
+.record-meta-fields{padding:13px;border:1px solid #e0e7eb;border-radius:11px;background:#f8fafb}
+.record-meta-fields label:nth-child(3){grid-column:span 2}
+.employee-record-form>footer{display:flex;align-items:center;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid #e5eaed}
+.employee-record-form>footer>div{display:flex;justify-content:center;gap:8px;flex:1}
+.employee-record-success{padding:10px 12px;margin-top:14px;border-radius:9px;background:#e8f6ef;color:#176447;font-size:12px}
+.employee-record-loading{display:grid;place-items:center;min-height:260px;color:#6e7f8b}
+.employee-record-close{position:absolute;right:16px;top:16px;display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:50%;background:#f0f3f5;color:#4f6473;cursor:pointer}
+.employee-record-close svg{width:17px}
+@media(max-width:800px){
+  .report-head-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
+  .report-head-actions button{width:100%}
+  .report-current-query{align-items:flex-start;flex-wrap:wrap}
+  .report-current-query dl{width:100%;order:3}
+  .report-current-query>button{margin-left:auto}
+  .report-wizard-dialog,.employee-record-dialog{width:100vw;max-width:none;height:100dvh;max-height:100dvh;border-radius:0}
+  .report-wizard-kinds{grid-template-columns:1fr}
+  .report-wizard-scope{grid-template-columns:1fr}
+  .employee-record-fields{grid-template-columns:1fr 1fr}
+  .employee-record-fields .record-wide,.record-meta-fields label:nth-child(3){grid-column:span 2}
+}
+@media(max-width:520px){
+  .report-head-actions{grid-template-columns:1fr}
+  .report-current-query{display:grid;gap:13px;padding:14px}
+  .report-current-query>div{min-width:0}
+  .report-current-query dl{display:grid;gap:9px}
+  .report-current-query>button{width:100%}
+  .report-wizard-dialog>[data-slot="dialog-header"],.employee-record-dialog>[data-slot="dialog-header"]{padding:20px 18px 10px}
+  .report-wizard-progress,.employee-record-progress{margin-left:18px;margin-right:18px}
+  .report-wizard-step-label,.report-wizard-kinds,.report-wizard-scope,.report-wizard-details,.report-wizard-review{padding-left:18px;padding-right:18px}
+  .report-wizard-actions{position:sticky;bottom:0;padding:12px 18px;background:#fff}
+  .report-wizard-actions>small{display:none}
+  .report-wizard-actions button{flex:1}
+  .report-wizard-dates{grid-template-columns:1fr}
+  .employee-record-security{margin-left:18px;margin-right:18px}
+  .employee-record-steps{padding-left:18px;padding-right:18px}
+  .employee-record-form{padding-left:18px;padding-right:18px}
+  .employee-record-fields{grid-template-columns:1fr}
+  .employee-record-fields .record-wide,.record-meta-fields label:nth-child(3){grid-column:span 1}
+  .employee-record-form>footer{display:grid;grid-template-columns:1fr}
+  .employee-record-form>footer>div{display:grid;grid-template-columns:1fr}
+  .employee-record-form>footer button{width:100%}
+}
