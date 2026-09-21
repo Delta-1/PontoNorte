@@ -4,7 +4,7 @@ import { corsHeaders, json } from "../_shared/cors.ts";
 import { hashPin } from "../_shared/pin.ts";
 
 type CreateUserBody = {
-  action?: "create" | "update" | "set_status" | "rotate_qr" | "delete";
+  action?: "create" | "update" | "complete_profile" | "set_status" | "rotate_qr" | "delete";
   employee_id?: string;
   status?: "active" | "inactive" | "on_leave" | "terminated";
   termination_reason?: string | null;
@@ -28,6 +28,13 @@ type CreateUserBody = {
   birth_date?: string | null;
   gender?: string | null;
   pin?: string;
+  postal_code?: string;
+  street?: string;
+  address_number?: string;
+  address_complement?: string | null;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
 };
 
 const allowedCreators = ["platform_admin", "company_owner", "hr_admin", "hr_agent", "manager"];
@@ -71,9 +78,37 @@ Deno.serve(async (req) => {
     const action = body.action ?? "create";
     if (action !== "create") {
       if (!body.employee_id) return json({ error: "Funcionário obrigatório." }, 400);
-      const { data: target } = await admin.from("employees").select("id,auth_user_id,department_id,full_name,username,personal_qr_token,overtime_mode,overtime_policy_id").eq("id",body.employee_id).eq("organization_id",body.organization_id).single();
+      const { data: target } = await admin.from("employees").select("id,auth_user_id,department_id,full_name,username,employee_code,personal_qr_token,overtime_mode,overtime_policy_id").eq("id",body.employee_id).eq("organization_id",body.organization_id).single();
       if (!target) return json({ error: "Funcionário não encontrado." }, 404);
       const isSelfProfileUpdate = action === "update" && target.auth_user_id === userData.user.id;
+      if (action === "complete_profile") {
+        const employeeMembership = membership?.find((member) => member.organization_id === body.organization_id && member.role === "employee");
+        if (target.auth_user_id !== userData.user.id || !employeeMembership) return json({ error: "A ficha inicial só pode ser preenchida pelo próprio funcionário." }, 403);
+        const email = body.email?.trim().toLowerCase() || "";
+        const phone = body.phone?.replace(/[^0-9+() -]/g, "").trim() || "";
+        const postalCode = body.postal_code?.replace(/\D/g, "") || "";
+        const street = body.street?.trim() || "";
+        const addressNumber = body.address_number?.trim() || "";
+        const neighborhood = body.neighborhood?.trim() || "";
+        const city = body.city?.trim() || "";
+        const state = body.state?.trim().toUpperCase() || "";
+        const addressComplement = body.address_complement?.trim() || "";
+        if (!/^\S+@\S+\.\S+$/.test(email)) return json({ error: "Informe um e-mail de contato válido." }, 400);
+        if (phone.replace(/\D/g, "").length < 10) return json({ error: "Informe um telefone com DDD." }, 400);
+        if (postalCode.length !== 8) return json({ error: "Informe um CEP com 8 números." }, 400);
+        if (!street || !addressNumber || !neighborhood || !city || !/^[A-Z]{2}$/.test(state)) return json({ error: "Preencha rua, número, bairro, cidade e UF." }, 400);
+        const completedAt = new Date().toISOString();
+        const { data: currentRecord } = await admin.from("employee_records").select("id,data").eq("employee_id", target.id).eq("template_key", "registro_empregado_br").maybeSingle();
+        const residenceAddress = `${street}, ${addressNumber}${addressComplement ? ` - ${addressComplement}` : ""} - ${neighborhood}, ${city}/${state} - CEP ${postalCode.slice(0,5)}-${postalCode.slice(5)}`;
+        const recordData = { ...(currentRecord?.data ?? {}), residence_address: residenceAddress, residential_phone: phone, contact_email: email, contact_phone: phone, address: { postal_code: postalCode, street, number: addressNumber, complement: addressComplement, neighborhood, city, state }, self_onboarding: { version: 1, completed_at: completedAt } };
+        const { error: employeeUpdateError } = await admin.from("employees").update({ email, phone, updated_at: completedAt }).eq("id", target.id).eq("organization_id", body.organization_id);
+        if (employeeUpdateError) return json({ error: employeeUpdateError.message }, 400);
+        const recordPayload = { organization_id: body.organization_id, employee_id: target.id, template_key: "registro_empregado_br", template_version: 1, record_number: target.employee_code, data: recordData, updated_by: userData.user.id, updated_at: completedAt };
+        const recordResult = currentRecord ? await admin.from("employee_records").update(recordPayload).eq("id", currentRecord.id) : await admin.from("employee_records").insert({ ...recordPayload, created_by: userData.user.id });
+        if (recordResult.error) return json({ error: recordResult.error.message }, 400);
+        await admin.from("audit_logs").insert({ organization_id: body.organization_id, actor_user_id: userData.user.id, action: "employee.self_onboarding_completed", entity_type: "employee", entity_id: target.id, after_data: { version: 1, fields: ["email", "phone", "address"] } });
+        return json({ success: true, completed_at: completedAt });
+      }
       if (!creator && !isSelfProfileUpdate) return json({ error: "Você não pode alterar este funcionário." }, 403);
       if (creator?.role === "manager" && target.department_id !== creator.department_id) return json({ error: "O líder só pode administrar seu próprio setor." }, 403);
       if (action === "rotate_qr") {
