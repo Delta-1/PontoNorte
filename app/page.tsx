@@ -19,9 +19,10 @@ import { functionErrorMessage } from "@/lib/function-error";
 import { cboTitleFor, commonCboOptions, formatCbo, normalizeCbo } from "@/lib/cbo";
 import QRCode from "qrcode";
 import { EmployeeRecordDialog } from "@/components/employee-record-dialog";
+import { EmployeeOnboarding } from "@/components/employee-onboarding";
 
 type Page = "Hoje"|"Funcionários"|"Dispositivos"|"Terminais"|"Setores e líderes"|"Chamada"|"Jornadas"|"Banco de horas"|"Conferência"|"Ocorrências"|"Relatórios"|"Métodos de ponto"|"Empresas"|"Configurações";
-type Context = { member:any; employee:any; organization:any };
+type Context = { member:any; employee:any; organization:any; employeeRecord:any|null };
 const menu:[Page,React.ComponentType<{className?:string}>][] = [
   ["Hoje",LayoutDashboard],["Funcionários",UsersRound],["Dispositivos",Smartphone],["Terminais",RadioTower],["Setores e líderes",UserCheck],
   ["Chamada",ClipboardCheck],["Jornadas",Clock3],["Banco de horas",History],["Conferência",CalendarCheck],
@@ -166,7 +167,7 @@ function Employees({ctx}:{ctx:Context}){
   return <><PageHead title="Funcionários" desc="Ficha cadastral, CBO, jornada, horas extras, acesso e QR individual" action={canCreate?<Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button><UserPlus/>Adicionar funcionário</Button></DialogTrigger><DialogContent className="employee-dialog">
   <DialogHeader className="employee-dialog-head">
     <span className="employee-dialog-icon"><UserPlus/></span>
-    <div><DialogTitle>Novo funcionário</DialogTitle><DialogDescription>Preencha os dados por bloco. Ao salvar, o acesso e o QR Code individual serão criados automaticamente.</DialogDescription></div>
+    <div><DialogTitle>Novo funcionário</DialogTitle><DialogDescription>Crie o vínculo e o acesso. No primeiro login, o funcionário completa contato e endereço.</DialogDescription></div>
   </DialogHeader>
   <form className="employee-dialog-form" onSubmit={create}>
     <div className="employee-dialog-scroll">
@@ -174,7 +175,7 @@ function Employees({ctx}:{ctx:Context}){
         <header><span>1</span><div><b>Identificação</b><small>Dados básicos para localizar o colaborador.</small></div></header>
         <div className="form-grid employee-form">
           <label>Nome completo<Input autoComplete="name" required value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/></label>
-          <label>CPF<Input required inputMode="numeric" maxLength={14} placeholder="000.000.000-00" value={form.cpf} onChange={e=>setForm({...form,cpf:e.target.value})}/></label>
+          <label>CPF (opcional neste momento)<Input inputMode="numeric" maxLength={14} placeholder="Pode ser informado depois pelo RH" value={form.cpf} onChange={e=>setForm({...form,cpf:e.target.value})}/></label>
           <label>Matrícula<Input required value={form.employee_code} onChange={e=>setForm({...form,employee_code:e.target.value})}/></label>
           <label>Usuário<Input required autoCapitalize="none" autoComplete="username" value={form.username} onChange={e=>setForm({...form,username:e.target.value.toLowerCase()})}/></label>
           <label>Data de nascimento<Input type="date" value={form.birth_date} onChange={e=>setForm({...form,birth_date:e.target.value})}/></label>
@@ -204,8 +205,6 @@ function Employees({ctx}:{ctx:Context}){
       <section className="employee-form-section">
         <header><span>4</span><div><b>Acesso e contato</b><small>Credenciais provisórias e formas de contato.</small></div></header>
         <div className="form-grid employee-form">
-          <label>E-mail pessoal<Input type="email" autoComplete="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label>
-          <label>Telefone<Input type="tel" autoComplete="tel" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
           <label>PIN do terminal<PasswordInput required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="6 números" value={form.pin} onChange={e=>setForm({...form,pin:e.target.value.replace(/\D/g,"")})}/></label>
           <label>Senha provisória<PasswordInput required minLength={8} autoComplete="new-password" placeholder="Mínimo de 8 caracteres" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label>
         </div>
@@ -590,7 +589,8 @@ export default function Home(){
       supabase.from("employees").select("*").eq("auth_user_id",user.id).single(),
     ]);
     if(memberResult.error||employeeResult.error){setError("Seu usuário não possui um vínculo ativo.");setLoading(false);return}
-    setCtx({member:memberResult.data,employee:employeeResult.data,organization:memberResult.data.organizations});setLoading(false);
+    const{data:employeeRecord}=await supabase.from("employee_records").select("id,data").eq("employee_id",employeeResult.data.id).eq("template_key","registro_empregado_br").maybeSingle();
+    setCtx({member:memberResult.data,employee:employeeResult.data,organization:memberResult.data.organizations,employeeRecord:employeeRecord??null});setLoading(false);
   },[]);
   useEffect(()=>{if(location.hash.startsWith("#demo-"))setDemo(true);load();const{data}=supabase.auth.onAuthStateChange((_event,session)=>{if(!session){setCtx(null);setLoading(false)}else setTimeout(load,0)});return()=>data.subscription.unsubscribe()},[load]);
   if(demo)return <DemoApp onExit={()=>{setDemo(false);history.replaceState(null,"",location.pathname)}}/>;
@@ -599,6 +599,7 @@ export default function Home(){
   if(!ctx)return <Login onLogin={load} onDemo={()=>{history.replaceState(null,"","#demo-hoje");setDemo(true)}}/>;
   if(ctx.employee.must_change_password)return <ChangePassword employee={ctx.employee} onDone={load}/>;
   if(ctx.member.role!=="platform_admin"&&!licenseActive(ctx.organization))return <LicenseActivation ctx={ctx} onDone={load}/>;
+  if(ctx.member.role==="employee"&&!ctx.employeeRecord?.data?.self_onboarding?.completed_at)return <EmployeeOnboarding employee={ctx.employee} organization={ctx.organization} onDone={load}/>;
   if(ctx.member.role==="employee")return <EmployeeWeb ctx={ctx} onRefresh={load}/>;
   return <Admin ctx={ctx} onRefresh={load}/>;
 }
