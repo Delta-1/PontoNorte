@@ -1,6 +1,6 @@
 # Manual completo do PontoNorte
 
-**Versão do manual:** 1.2  
+**Versão do manual:** 1.3 — 2 de outubro de 2026  
 **Público:** empresas clientes, proprietários, RH, líderes e colaboradores  
 **Plataforma:** PontoNorte — controle de ponto multiempresa
 
@@ -821,7 +821,65 @@ A suspensão impede o acesso operacional da empresa, mas não deve apagar seu hi
 
 Credenciais internas nunca devem ser incluídas no manual dos clientes ou enviadas em grupos.
 
-## 23. Segurança e privacidade
+## 23. Cobrança mensal por funcionário ativo
+
+A aba **Cobranças** aparece somente para o Administrador geral PontoNorte. Ela controla o valor comercial acordado com cada empresa sem interferir nos registros de ponto.
+
+### 23.1 Como o valor é calculado
+
+Ao gerar uma competência, o sistema fotografa a quantidade de funcionários cuja situação é **Ativo** e aplica:
+
+**Quantidade de ativos × preço por funcionário = subtotal mensal**
+
+Funcionários inativos, afastados ou demitidos não entram na contagem. O valor gravado na competência não muda se o quadro de pessoal for alterado depois; para recalcular antes do fechamento, gere novamente a mesma competência.
+
+### 23.2 Configurar a regra padrão
+
+1. Entre como Administrador geral.
+2. Abra **Cobranças**.
+3. Em **Regra padrão**, informe o preço por funcionário.
+4. Escolha o dia de vencimento, entre 1 e 28.
+5. Confirme o mês gratuito, quando houver uma campanha ou período de teste.
+6. Selecione **Salvar regra**.
+
+Enquanto o preço estiver em R$ 0,00, as competências futuras também serão geradas sem valor. Defina o preço acordado antes de iniciar a cobrança comercial.
+
+### 23.3 Outubro de 2026 gratuito
+
+Outubro de 2026 está configurado como competência gratuita. O PontoNorte registra a quantidade de funcionários ativos para conferência, aplica desconto integral e mantém o total em **R$ 0,00** para todas as empresas. Nenhum pagamento deve ser solicitado por essa competência.
+
+### 23.4 Condição comercial por empresa
+
+Na tabela de empresas, selecione **Condição comercial** para:
+
+- aplicar um preço unitário diferente da regra padrão;
+- desativar temporariamente a cobrança;
+- marcar uma empresa como isenta;
+- registrar uma observação sobre contrato ou negociação.
+
+Deixe o preço personalizado vazio para voltar a usar a regra geral.
+
+### 23.5 Gerar e fechar uma competência
+
+1. Escolha o mês em **Competência**.
+2. Confira o número atual de ativos.
+3. Selecione **Gerar competência**.
+4. Revise preço unitário, quantidade e total.
+5. Depois de receber o pagamento pelo meio acordado com o cliente, selecione **Marcar pago**.
+
+O PontoNorte, nesta versão, controla valores e situações internamente. Ele não realiza cobrança automática em cartão, PIX ou boleto; o recebimento continua pelo canal comercial definido com o cliente.
+
+### 23.6 Situações exibidas
+
+| Situação | Significado |
+|---|---|
+| Prévia | A competência ainda não foi gerada |
+| Gratuito | Total zerado por mês gratuito ou isenção |
+| Pendente | Valor gerado e ainda não confirmado |
+| Pago | Recebimento confirmado pelo Administrador geral |
+| Desativado | Empresa fora da cobrança daquela competência |
+
+## 24. Segurança e privacidade
 
 - cada pessoa deve usar conta própria;
 - não compartilhe senha ou PIN;
@@ -835,7 +893,7 @@ Credenciais internas nunca devem ser incluídas no manual dos clientes ou enviad
 - preserve os registros originais e a trilha de auditoria;
 - siga LGPD, regras trabalhistas, acordos e orientação jurídica/contábil.
 
-## 24. Rotina recomendada para o RH
+## 25. Rotina recomendada para o RH
 
 ### Todos os dias
 
@@ -863,7 +921,7 @@ Credenciais internas nunca devem ser incluídas no manual dos clientes ou enviad
 - exportar PDF resumo;
 - arquivar os arquivos em local autorizado.
 
-## 25. Sequência de implantação para uma nova empresa
+## 26. Sequência de implantação para uma nova empresa
 
 1. Cadastrar a empresa.
 2. Validar e guardar o código.
@@ -884,7 +942,7 @@ Credenciais internas nunca devem ser incluídas no manual dos clientes ou enviad
 17. Testar relatório em planilha e PDF.
 18. Orientar a equipe antes do início oficial.
 
-## 26. Solução de problemas
+## 27. Solução de problemas
 
 | Problema | Verificação recomendada |
 |---|---|
@@ -905,7 +963,7 @@ Credenciais internas nunca devem ser incluídas no manual dos clientes ou enviad
 | Credenciamento suspenso | Falar com a administração PontoNorte |
 | Esqueci o acesso | Abrir recuperação e guardar o protocolo |
 
-## 27. Roteiro rápido de treinamento
+## 28. Roteiro rápido de treinamento
 
 Para apresentar o PontoNorte a uma equipe:
 
@@ -921,7 +979,7 @@ Para apresentar o PontoNorte a uma equipe:
 10. mostre o layout do funcionário no celular;
 11. reforce senha individual, privacidade e conferência diária.
 
-## 28. Glossário
+## 29. Glossário
 
 | Termo | Significado |
 |---|---|
@@ -939,6 +997,8 @@ Para apresentar o PontoNorte a uma equipe:
 | Terminal | Aparelho corporativo compartilhado |
 | Dispositivo | Celular ou navegador vinculado ao usuário |
 | QR individual | Código exclusivo do colaborador |
+| Competência | Mês de referência de uma cobrança |
+| Preço por funcionário | Valor unitário multiplicado apenas pelos colaboradores ativos |
 | Trilha de auditoria | Histórico que preserva origem e decisões sobre os dados |
 
 ---
