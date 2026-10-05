@@ -622,7 +622,8 @@
   max-width:860px!important;
   max-height:none!important;
   margin:0!important;
-  translate:none!important;
+  --tw-translate-x:0px!important;
+  --tw-translate-y:0px!important;
   transform:translateX(-50%)!important;
   overflow:hidden!important;
 }
@@ -640,7 +641,7 @@
 .employee-onboarding-two-fields{min-width:0}
 
 @media(max-width:700px){
-  .employee-dialog{inset:0!important;top:0!important;left:0!important;width:100vw!important;height:100dvh!important;max-width:none!important;translate:none!important;transform:none!important;border-radius:0!important}
+  .employee-dialog{inset:0!important;top:0!important;left:0!important;width:100vw!important;height:100dvh!important;max-width:none!important;--tw-translate-x:0px!important;--tw-translate-y:0px!important;transform:none!important;border-radius:0!important}
   .employee-dialog-head{padding-top:max(15px,env(safe-area-inset-top))}
   .employee-dialog-scroll{padding-bottom:18px;scroll-padding-block:80px 120px}
   .employee-dialog-actions{padding-bottom:max(11px,env(safe-area-inset-bottom))}
