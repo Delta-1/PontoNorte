@@ -615,9 +615,14 @@
   display:grid!important;
   grid-template-rows:auto minmax(0,1fr)!important;
   width:min(860px,calc(100vw - 32px))!important;
+  top:max(16px,calc(50vh - 430px))!important;
+  top:max(16px,calc(50dvh - 430px))!important;
+  left:50%!important;
   height:min(860px,calc(100dvh - 32px))!important;
   max-width:860px!important;
   max-height:none!important;
+  margin:0!important;
+  transform:translateX(-50%)!important;
   overflow:hidden!important;
 }
 .employee-dialog-form{display:grid!important;grid-template-rows:minmax(0,1fr) auto!important;min-height:0!important;overflow:hidden!important}
