@@ -7,6 +7,7 @@ const responsiveRules = css.split("/* Fluxos de funcionário: modal e primeiro a
 
 test("o modal de funcionário nunca depende de translação vertical", () => {
   assert.match(responsiveRules, /top:max\(16px,calc\(50dvh - 430px\)\)!important/);
+  assert.match(responsiveRules, /translate:none!important/);
   assert.match(responsiveRules, /transform:translateX\(-50%\)!important/);
   assert.doesNotMatch(responsiveRules, /translate\(-50%,-50%\)/);
 });
@@ -14,7 +15,7 @@ test("o modal de funcionário nunca depende de translação vertical", () => {
 test("o modal ocupa a tela inteira em celulares", () => {
   assert.match(
     responsiveRules,
-    /@media\(max-width:700px\)[\s\S]*?\.employee-dialog\{[^}]*inset:0!important[^}]*height:100dvh!important[^}]*transform:none!important/,
+    /@media\(max-width:700px\)[\s\S]*?\.employee-dialog\{[^}]*inset:0!important[^}]*height:100dvh!important[^}]*translate:none!important[^}]*transform:none!important/,
   );
 });
 
