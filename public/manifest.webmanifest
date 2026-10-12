@@ -1,7 +1,7 @@
 {
   "name": "PontoNorte",
   "short_name": "PontoNorte",
-  "description": "Aplicativo de registro de ponto da CPUSIS",
+  "description": "Aplicativo de registro de ponto PontoNorte",
   "start_url": "./app-ponto",
   "scope": "./",
   "display": "standalone",

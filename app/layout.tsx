@@ -5,7 +5,7 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 export const metadata: Metadata = {
   title: "PontoNorte — Gestão inteligente de jornada",
-  description: "Controle de ponto e gestão de jornada da CPUSIS.",
+  description: "Controle de ponto e gestão de jornada para empresas.",
   other: {
     "codex-preview": "development",
   },
