@@ -1,7 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import { corsHeaders, json } from "../_shared/cors.ts";
-import { hashPin } from "../_shared/pin.ts";
 
 type CreateUserBody = {
   action?: "create" | "update" | "complete_profile" | "set_status" | "rotate_qr" | "delete";
@@ -27,7 +26,6 @@ type CreateUserBody = {
   cpf?: string | null;
   birth_date?: string | null;
   gender?: string | null;
-  pin?: string;
   postal_code?: string;
   street?: string;
   address_number?: string;
@@ -42,6 +40,12 @@ const allowedCreators = ["platform_admin", "company_owner", "hr_admin", "hr_agen
 function newPersonalQrToken() {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   return Array.from(bytes).map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function newTemporaryPassword(){
+  const alphabet="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const bytes=crypto.getRandomValues(new Uint8Array(9));
+  return `Pn@${Array.from(bytes).map(value=>alphabet[value%alphabet.length]).join("")}`;
 }
 
 Deno.serve(async (req) => {
@@ -164,10 +168,6 @@ Deno.serve(async (req) => {
         if (!isSelfProfileUpdate && target.auth_user_id) {
           await admin.from("organization_members").update({ department_id: updates.department_id }).eq("user_id", target.auth_user_id).eq("organization_id", body.organization_id);
         }
-        if (!isSelfProfileUpdate && body.pin) {
-          if (!/^\d{6}$/.test(body.pin)) return json({ error: "O PIN deve ter seis números." }, 400);
-          await admin.from("employee_secrets").update({ pin_hash: await hashPin(body.pin), failed_attempts: 0, locked_until: null, updated_at: new Date().toISOString() }).eq("employee_id", target.id);
-        }
         await admin.from("audit_logs").insert({organization_id:body.organization_id,actor_user_id:userData.user.id,action:isSelfProfileUpdate?"employee.profile_updated":"employee.updated",entity_type:"employee",entity_id:target.id,after_data:{cbo_code:cboCode,job_title:updates.job_title,overtime_mode:updates.overtime_mode,overtime_policy_id:updates.overtime_policy_id}});
         return json({ employee: updated });
       }
@@ -182,10 +182,10 @@ Deno.serve(async (req) => {
 
     const username = body.username?.toLowerCase().trim().replace(/[^a-z0-9._-]/g, "");
     if (!username || username.length < 3 || !body.full_name || !body.employee_code) return json({ error: "Nome, matrícula e usuário são obrigatórios." }, 400);
-    if (!body.password || body.password.length < 8) return json({ error: "A senha provisória deve ter pelo menos 8 caracteres." }, 400);
+    const temporaryPassword=body.password?.trim()||newTemporaryPassword();
+    if (temporaryPassword.length < 8) return json({ error: "A senha provisória deve ter pelo menos 8 caracteres." }, 400);
     const cpf = body.cpf?.replace(/\D/g, "") || null;
     if (cpf && cpf.length !== 11) return json({ error: "Informe um CPF com 11 dígitos." }, 400);
-    if (!/^\d{6}$/.test(body.pin ?? "")) return json({ error: "O PIN do terminal deve ter 6 números." }, 400);
     if (!body.role) return json({ error: "Perfil obrigatório." }, 400);
     const cboCode = body.cbo_code?.replace(/\D/g, "") || null;
     if (cboCode && cboCode.length !== 6) return json({ error: "O CBO deve ter seis dígitos." }, 400);
@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
     const loginEmail = `${username}.${org.company_code}@login.pontonorte.app`;
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email: loginEmail,
-      password: body.password,
+      password: temporaryPassword,
       email_confirm: true,
       app_metadata: {
         organization_id: body.organization_id,
@@ -260,18 +260,6 @@ Deno.serve(async (req) => {
       return json({ error: memberError.message }, 409);
     }
 
-    const { error: secretError } = await admin.from("employee_secrets").insert({
-      organization_id: body.organization_id,
-      employee_id: employee.id,
-      pin_hash: await hashPin(body.pin),
-    });
-    if (secretError) {
-      await admin.from("organization_members").delete().eq("user_id", created.user.id);
-      await admin.from("employees").delete().eq("id", employee.id);
-      await admin.auth.admin.deleteUser(created.user.id);
-      return json({ error: "Não foi possível proteger o PIN do funcionário." }, 409);
-    }
-
     await admin.from("audit_logs").insert({
       organization_id: body.organization_id,
       actor_user_id: userData.user.id,
@@ -283,8 +271,10 @@ Deno.serve(async (req) => {
 
     return json({
       employee_id: employee.id,
+      full_name: body.full_name,
       username,
       company_code: org.company_code,
+      temporary_password: temporaryPassword,
       must_change_password: true,
     }, 201);
   } catch (error) {

@@ -662,3 +662,14 @@
   .employee-onboarding-copy>small{font-size:9px}
   .employee-onboarding-icon{width:46px;height:46px}
 }
+
+/* Acesso simples — dados lembrados, cadastro imediato e credencial provisória */
+.remember-login{display:flex!important;flex-direction:row!important;align-items:flex-start;gap:10px!important;padding:11px 12px;border:1px solid #dce5ea;border-radius:9px;background:#f8fafb;cursor:pointer}
+.remember-login input{width:18px!important;height:18px!important;margin:1px 0 0;accent-color:#155f88}
+.remember-login span{display:grid;gap:2px}.remember-login b{color:#29495f;font-size:12px}.remember-login small{color:#74848f;font-size:10px;font-weight:500}
+.signup-trial-note{display:flex;align-items:center;gap:11px;padding:13px;border:1px solid #cfe5d9;border-radius:10px;background:#f1f9f5;color:#285a46}
+.signup-trial-note>svg{width:21px;flex:none;color:#21845c}.signup-trial-note span{display:grid;gap:2px}.signup-trial-note small{color:#698076}
+.signup-success{display:grid;gap:12px}.signup-success>.auth-copy{margin-bottom:4px}.signup-success>button{margin-top:0!important}
+.issued-access{display:flex;align-items:center;gap:13px;margin-bottom:16px;padding:16px 18px;border:1px solid #bcdcca;border-radius:11px;background:#edf8f2;color:#204f3a}
+.issued-access>svg{width:25px;flex:none;color:#23835b}.issued-access>div{min-width:0;flex:1}.issued-access b{font-size:14px}.issued-access p{margin:5px 0 3px;color:#3e6252;font-size:12px;line-height:1.6}.issued-access strong{color:#0e4d35;word-break:break-word}.issued-access small{color:#6a8176}.issued-access>button{display:grid;width:32px;height:32px;place-items:center;border:0;border-radius:50%;background:#dcefe4;color:#376b52}.issued-access>button svg{width:16px}
+@media(max-width:600px){.issued-access{align-items:flex-start}.issued-access p{display:grid}.issued-access>button{flex:none}}

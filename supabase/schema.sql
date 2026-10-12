@@ -1,4 +1,4 @@
--- PontoNorte by CPUSIS — banco de produção multiempresa (PostgreSQL 17)
+-- PontoNorte — banco de produção multiempresa (PostgreSQL 17)
 create extension if not exists pgcrypto;
 create schema if not exists private;
 
