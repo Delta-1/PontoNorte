@@ -1,652 +1,9750 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bell, Building2, CalendarCheck, CalendarDays, Check, ChevronDown, CircleAlert, ClipboardCheck, CreditCard,
-  ChevronLeft, ChevronRight, Clock3, Download, FileSpreadsheet, FileText, Filter, Fingerprint, LayoutDashboard, LogOut, Menu,
-  FileCheck2, History, KeyRound, MapPin, MoreHorizontal, Pencil, Plus, QrCode, RadioTower, RefreshCw, Search, Settings, ShieldCheck,
-  Smartphone, UserCheck, UserPlus, UserRound, UsersRound, Eye, EyeOff, X,
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  Bell,
+  Building2,
+  CalendarCheck,
+  CalendarDays,
+  Check,
+  ChevronDown,
+  CircleAlert,
+  ClipboardCheck,
+  Copy,
+  CreditCard,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Filter,
+  Fingerprint,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  FileCheck2,
+  History,
+  KeyRound,
+  MapPin,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  QrCode,
+  RadioTower,
+  RefreshCw,
+  Search,
+  Settings,
+  ShieldCheck,
+  Smartphone,
+  UserCheck,
+  UserPlus,
+  UserRound,
+  UsersRound,
+  Eye,
+  EyeOff,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { employeeLoginEmail, supabase } from "@/lib/supabase";
 import { functionErrorMessage } from "@/lib/function-error";
-import { cboTitleFor, commonCboOptions, formatCbo, normalizeCbo } from "@/lib/cbo";
+import {
+  cboTitleFor,
+  commonCboOptions,
+  formatCbo,
+  normalizeCbo,
+} from "@/lib/cbo";
 import QRCode from "qrcode";
 import { EmployeeRecordDialog } from "@/components/employee-record-dialog";
 import { EmployeeOnboarding } from "@/components/employee-onboarding";
 
-type Page = "Hoje"|"Funcionários"|"Dispositivos"|"Terminais"|"Setores e líderes"|"Chamada"|"Jornadas"|"Banco de horas"|"Conferência"|"Ocorrências"|"Relatórios"|"Métodos de ponto"|"Empresas"|"Cobranças"|"Configurações";
-type Context = { member:any; employee:any; organization:any; employeeRecord:any|null };
-const menu:[Page,React.ComponentType<{className?:string}>][] = [
-  ["Hoje",LayoutDashboard],["Funcionários",UsersRound],["Dispositivos",Smartphone],["Terminais",RadioTower],["Setores e líderes",UserCheck],
-  ["Chamada",ClipboardCheck],["Jornadas",Clock3],["Banco de horas",History],["Conferência",CalendarCheck],
-  ["Ocorrências",CircleAlert],["Relatórios",FileSpreadsheet],["Métodos de ponto",Fingerprint],
-  ["Empresas",Building2],["Cobranças",CreditCard],["Configurações",Settings],
-];
-const pageIds:Record<Page,string>={"Hoje":"hoje","Funcionários":"funcionarios","Dispositivos":"dispositivos","Terminais":"terminais","Setores e líderes":"setores","Chamada":"chamada","Jornadas":"jornadas","Banco de horas":"banco-horas","Conferência":"conferencia","Ocorrências":"ocorrencias","Relatórios":"relatorios","Métodos de ponto":"metodos","Empresas":"empresas","Cobranças":"cobrancas","Configurações":"configuracoes"};
-const labels:Record<string,string> = {
-  platform_admin:"Administrador geral PontoNorte",company_owner:"Administrador da empresa",
-  hr_admin:"Administrador de RH",hr_agent:"Equipe de RH",manager:"Líder de setor",employee:"Funcionário",
+type Page =
+  | "Hoje"
+  | "Funcionários"
+  | "Dispositivos"
+  | "Terminais"
+  | "Setores e líderes"
+  | "Chamada"
+  | "Jornadas"
+  | "Banco de horas"
+  | "Conferência"
+  | "Ocorrências"
+  | "Relatórios"
+  | "Métodos de ponto"
+  | "Empresas"
+  | "Cobranças"
+  | "Configurações";
+type Context = {
+  member: any;
+  employee: any;
+  organization: any;
+  employeeRecord: any | null;
 };
-const eventLabels:Record<string,string> = {entry:"Entrada",break_start:"Início do intervalo",break_end:"Fim do intervalo",exit:"Saída"};
-const methodLabels:Record<string,string> = {mobile:"Botão no aplicativo",qr_code:"QR Code",face:"Reconhecimento facial",fingerprint:"Relógio biométrico"};
-const overtimeModeLabels:Record<string,string>={bank:"Banco de horas",pay:"Pagamento em folha",disabled:"Não controlar"};
-const roleCanManage = (role:string) => ["platform_admin","company_owner","hr_admin","hr_agent"].includes(role);
-const initials = (name:string="") => name.split(" ").filter(Boolean).slice(0,2).map((n)=>n[0]).join("").toUpperCase();
-const dateTime = (value:string) => new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(new Date(value));
-const timeLabel = (value?:string|null) => value?new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit"}).format(new Date(value)):"—";
-const minutes = (value:number=0) => `${value<0?"−":""}${Math.floor(Math.abs(value)/60)}h ${String(Math.abs(value)%60).padStart(2,"0")}min`;
-const dateLabel = (value:string) => value?new Intl.DateTimeFormat("pt-BR").format(new Date(`${value}T12:00:00Z`)):"—";
-const dateKeyInZone = (value:Date|string,timeZone:string="America/Sao_Paulo") => {const parts=new Intl.DateTimeFormat("pt-BR",{timeZone,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(value));const get=(type:string)=>parts.find(part=>part.type===type)?.value??"";return `${get("year")}-${get("month")}-${get("day")}`};
-const shiftDateKey = (value:string,days:number) => {const date=new Date(`${value}T12:00:00Z`);date.setUTCDate(date.getUTCDate()+days);return date.toISOString().slice(0,10)};
-const monthBounds = (month:string) => {const start=`${month}-01`;const next=new Date(`${start}T12:00:00Z`);next.setUTCMonth(next.getUTCMonth()+1);return{start,end:shiftDateKey(next.toISOString().slice(0,10),-1)}};
-const dateKeysBetween = (start:string,end:string) => {const dates:string[]=[];for(let current=start;current<=end&&dates.length<=366;current=shiftDateKey(current,1))dates.push(current);return dates};
-const relationOne = (value:any) => Array.isArray(value)?value[0]:value;
-async function fetchSupabaseRows(query:any){const rows:any[]=[];for(let offset=0;offset<100000;offset+=1000){const{data,error}=await query.range(offset,offset+999);if(error)throw error;rows.push(...(data??[]));if(!data||data.length<1000)return rows}throw new Error("O relatório ultrapassou 100 mil registros. Reduza o período para emitir os arquivos com segurança.")}
-const todayStart = () => { const d=new Date(); d.setHours(0,0,0,0); return d.toISOString(); };
-const licenseActive = (organization:any) => organization?.license_status==="active" && (!organization?.paid_until || organization.paid_until>=new Date().toISOString().slice(0,10));
-const employeeQrPayload = (organizationId:string,employee:any) => `PNEMP:${organizationId}:${employee.id}:${employee.personal_qr_token}`;
-const LOGIN_HINT_KEY="pontonorte_login_hint";
-const savedLoginHint=()=>{if(typeof window==="undefined")return{company:"",username:""};try{return JSON.parse(localStorage.getItem(LOGIN_HINT_KEY)||"null")||{company:"",username:""}}catch{return{company:"",username:""}}};
+const menu: [Page, React.ComponentType<{ className?: string }>][] = [
+  ["Hoje", LayoutDashboard],
+  ["Funcionários", UsersRound],
+  ["Dispositivos", Smartphone],
+  ["Terminais", RadioTower],
+  ["Setores e líderes", UserCheck],
+  ["Chamada", ClipboardCheck],
+  ["Jornadas", Clock3],
+  ["Banco de horas", History],
+  ["Conferência", CalendarCheck],
+  ["Ocorrências", CircleAlert],
+  ["Relatórios", FileSpreadsheet],
+  ["Métodos de ponto", Fingerprint],
+  ["Empresas", Building2],
+  ["Cobranças", CreditCard],
+  ["Configurações", Settings],
+];
+const pageIds: Record<Page, string> = {
+  Hoje: "hoje",
+  Funcionários: "funcionarios",
+  Dispositivos: "dispositivos",
+  Terminais: "terminais",
+  "Setores e líderes": "setores",
+  Chamada: "chamada",
+  Jornadas: "jornadas",
+  "Banco de horas": "banco-horas",
+  Conferência: "conferencia",
+  Ocorrências: "ocorrencias",
+  Relatórios: "relatorios",
+  "Métodos de ponto": "metodos",
+  Empresas: "empresas",
+  Cobranças: "cobrancas",
+  Configurações: "configuracoes",
+};
+const labels: Record<string, string> = {
+  platform_admin: "Administrador geral PontoNorte",
+  company_owner: "Administrador da empresa",
+  hr_admin: "Administrador de RH",
+  hr_agent: "Equipe de RH",
+  manager: "Líder de setor",
+  employee: "Funcionário",
+};
+const eventLabels: Record<string, string> = {
+  entry: "Entrada",
+  break_start: "Início do intervalo",
+  break_end: "Fim do intervalo",
+  exit: "Saída",
+};
+const methodLabels: Record<string, string> = {
+  mobile: "Botão no aplicativo",
+  qr_code: "QR Code",
+  face: "Reconhecimento facial",
+  fingerprint: "Relógio biométrico",
+};
+const overtimeModeLabels: Record<string, string> = {
+  bank: "Banco de horas",
+  pay: "Pagamento em folha",
+  disabled: "Não controlar",
+};
+const roleCanManage = (role: string) =>
+  ["platform_admin", "company_owner", "hr_admin", "hr_agent"].includes(role);
+const initials = (name: string = "") =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
+const dateTime = (value: string) =>
+  new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
+const timeLabel = (value?: string | null) =>
+  value
+    ? new Intl.DateTimeFormat("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date(value))
+    : "—";
+const minutes = (value: number = 0) =>
+  `${value < 0 ? "−" : ""}${Math.floor(Math.abs(value) / 60)}h ${String(Math.abs(value) % 60).padStart(2, "0")}min`;
+const dateLabel = (value: string) =>
+  value
+    ? new Intl.DateTimeFormat("pt-BR").format(new Date(`${value}T12:00:00Z`))
+    : "—";
+const dateKeyInZone = (
+  value: Date | string,
+  timeZone: string = "America/Sao_Paulo",
+) => {
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(value));
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+};
+const shiftDateKey = (value: string, days: number) => {
+  const date = new Date(`${value}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+const monthBounds = (month: string) => {
+  const start = `${month}-01`;
+  const next = new Date(`${start}T12:00:00Z`);
+  next.setUTCMonth(next.getUTCMonth() + 1);
+  return { start, end: shiftDateKey(next.toISOString().slice(0, 10), -1) };
+};
+const dateKeysBetween = (start: string, end: string) => {
+  const dates: string[] = [];
+  for (
+    let current = start;
+    current <= end && dates.length <= 366;
+    current = shiftDateKey(current, 1)
+  )
+    dates.push(current);
+  return dates;
+};
+const relationOne = (value: any) => (Array.isArray(value) ? value[0] : value);
+async function fetchSupabaseRows(query: any) {
+  const rows: any[] = [];
+  for (let offset = 0; offset < 100000; offset += 1000) {
+    const { data, error } = await query.range(offset, offset + 999);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < 1000) return rows;
+  }
+  throw new Error(
+    "O relatório ultrapassou 100 mil registros. Reduza o período para emitir os arquivos com segurança.",
+  );
+}
+const todayStart = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+};
+const licenseActive = (organization: any) =>
+  organization?.license_status === "active" &&
+  (!organization?.paid_until ||
+    organization.paid_until >= new Date().toISOString().slice(0, 10));
+const employeeQrPayload = (organizationId: string, employee: any) =>
+  `PNEMP:${organizationId}:${employee.id}:${employee.personal_qr_token}`;
+const LOGIN_HINT_KEY = "pontonorte_login_hint";
+const savedLoginHint = () => {
+  if (typeof window === "undefined") return { company: "", username: "" };
+  try {
+    return (
+      JSON.parse(localStorage.getItem(LOGIN_HINT_KEY) || "null") || {
+        company: "",
+        username: "",
+      }
+    );
+  } catch {
+    return { company: "", username: "" };
+  }
+};
 
-function Brand(){return <div className="brand"><span><RadioTower/></span><b>Ponto<em>Norte</em></b></div>}
-function Badge({children,color="green"}:{children:React.ReactNode;color?:string}){return <span className={"badge "+color}>{children}</span>}
-function PageHead({title,desc,action}:{title:string;desc:string;action?:React.ReactNode}){return <header className="page-head"><div><h1>{title}</h1><p>{desc}</p></div>{action}</header>}
-function ErrorBox({message}:{message:string}){return message?<div className="form-error">{message}</div>:null}
-function PasswordInput(props:React.ComponentProps<typeof Input>){
-  const[visible,setVisible]=useState(false);
-  return <span className="password-control"><Input {...props} type={visible?"text":"password"}/><button type="button" onClick={()=>setVisible(value=>!value)} aria-label={visible?"Ocultar senha":"Mostrar senha"} title={visible?"Ocultar senha":"Mostrar senha"}>{visible?<EyeOff/>:<Eye/>}</button></span>
+function Brand() {
+  return (
+    <div className="brand">
+      <span>
+        <RadioTower />
+      </span>
+      <b>
+        Ponto<em>Norte</em>
+      </b>
+    </div>
+  );
+}
+function Badge({
+  children,
+  color = "green",
+}: {
+  children: React.ReactNode;
+  color?: string;
+}) {
+  return <span className={"badge " + color}>{children}</span>;
+}
+function PageHead({
+  title,
+  desc,
+  action,
+}: {
+  title: string;
+  desc: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <header className="page-head">
+      <div>
+        <h1>{title}</h1>
+        <p>{desc}</p>
+      </div>
+      {action}
+    </header>
+  );
+}
+function ErrorBox({ message }: { message: string }) {
+  return message ? <div className="form-error">{message}</div> : null;
+}
+function PasswordInput(props: React.ComponentProps<typeof Input>) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <span className="password-control">
+      <Input {...props} type={visible ? "text" : "password"} />
+      <button
+        type="button"
+        onClick={() => setVisible((value) => !value)}
+        aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
+        title={visible ? "Ocultar senha" : "Mostrar senha"}
+      >
+        {visible ? <EyeOff /> : <Eye />}
+      </button>
+    </span>
+  );
 }
 
-function Login({onLogin,onDemo}:{onLogin:()=>void;onDemo:()=>void}){
-  const [signup,setSignup]=useState(false);
-  const [forgot,setForgot]=useState(false);
-  const [company,setCompany]=useState(()=>savedLoginHint().company);
-  const [username,setUsername]=useState(()=>savedLoginHint().username);
-  const [password,setPassword]=useState("");
-  const [remember,setRemember]=useState(()=>Boolean(savedLoginHint().company));
-  const [error,setError]=useState(""); const [loading,setLoading]=useState(false);
-  async function submit(e:FormEvent){
-    e.preventDefault(); setLoading(true); setError("");
-    const {error} = await supabase.auth.signInWithPassword({email:employeeLoginEmail(company,username),password});
+function Login({
+  onLogin,
+  onDemo,
+}: {
+  onLogin: () => void;
+  onDemo: () => void;
+}) {
+  const [signup, setSignup] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const [company, setCompany] = useState(() => savedLoginHint().company);
+  const [username, setUsername] = useState(() => savedLoginHint().username);
+  const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(() =>
+    Boolean(savedLoginHint().company),
+  );
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    const { error } = await supabase.auth.signInWithPassword({
+      email: employeeLoginEmail(company, username),
+      password,
+    });
     setLoading(false);
-    if(error)return setError("Código da empresa, usuário ou senha incorretos.");
-    if(remember)localStorage.setItem(LOGIN_HINT_KEY,JSON.stringify({company:company.toUpperCase(),username:username.toLowerCase()}));else localStorage.removeItem(LOGIN_HINT_KEY);
+    if (error)
+      return setError("Código da empresa, usuário ou senha incorretos.");
+    if (remember)
+      localStorage.setItem(
+        LOGIN_HINT_KEY,
+        JSON.stringify({
+          company: company.toUpperCase(),
+          username: username.toLowerCase(),
+        }),
+      );
+    else localStorage.removeItem(LOGIN_HINT_KEY);
     onLogin();
   }
-  if(signup)return <CompanySignup onBack={()=>setSignup(false)} onDone={onLogin}/>;
-  if(forgot)return <ForgotPassword onBack={()=>setForgot(false)}/>;
-  return <main className="auth-stage"><section className="auth-card"><Brand/><div className="auth-copy"><span><ShieldCheck/></span><h1>Entrar</h1><p>Código da empresa, usuário e senha.</p></div><form onSubmit={submit}><label>Código da empresa<Input required placeholder="Ex.: NORTE01" value={company} onChange={e=>setCompany(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))} autoCapitalize="characters" autoComplete="organization"/></label><label>Usuário<Input required placeholder="Seu usuário" value={username} onChange={e=>setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g,""))} autoCapitalize="none" autoComplete="username"/></label><label>Senha<PasswordInput required value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password"/></label><label className="remember-login"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/><span><b>Lembrar meu acesso</b></span></label><button type="button" className="forgot-link" onClick={()=>setForgot(true)}>Esqueci meu acesso</button><ErrorBox message={error}/><Button disabled={loading}>{loading?<RefreshCw className="spin"/>:"Entrar"}</Button><Button type="button" variant="outline" onClick={()=>setSignup(true)}>Criar conta da empresa</Button><div className="demo-access"><Button type="button" variant="outline" onClick={onDemo}><LayoutDashboard/>Ver demonstração</Button></div></form></section></main>
+  if (signup)
+    return <CompanySignup onBack={() => setSignup(false)} onDone={onLogin} />;
+  if (forgot) return <ForgotPassword onBack={() => setForgot(false)} />;
+  return (
+    <main className="auth-stage">
+      <section className="auth-card">
+        <Brand />
+        <div className="auth-copy">
+          <span>
+            <ShieldCheck />
+          </span>
+          <h1>Entrar</h1>
+          <p>Código da empresa, usuário e senha.</p>
+        </div>
+        <form onSubmit={submit}>
+          <label>
+            Código da empresa
+            <Input
+              required
+              placeholder="Ex.: NORTE01"
+              value={company}
+              onChange={(e) =>
+                setCompany(
+                  e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+                )
+              }
+              autoCapitalize="characters"
+              autoComplete="organization"
+            />
+          </label>
+          <label>
+            Usuário
+            <Input
+              required
+              placeholder="Seu usuário"
+              value={username}
+              onChange={(e) =>
+                setUsername(
+                  e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ""),
+                )
+              }
+              autoCapitalize="none"
+              autoComplete="username"
+            />
+          </label>
+          <label>
+            Senha
+            <PasswordInput
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </label>
+          <label className="remember-login">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+            />
+            <span>
+              <b>Lembrar meu acesso</b>
+            </span>
+          </label>
+          <button
+            type="button"
+            className="forgot-link"
+            onClick={() => setForgot(true)}
+          >
+            Esqueci meu acesso
+          </button>
+          <ErrorBox message={error} />
+          <Button disabled={loading}>
+            {loading ? <RefreshCw className="spin" /> : "Entrar"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setSignup(true)}
+          >
+            Criar conta da empresa
+          </Button>
+          <div className="demo-access">
+            <Button type="button" variant="outline" onClick={onDemo}>
+              <LayoutDashboard />
+              Ver demonstração
+            </Button>
+          </div>
+        </form>
+      </section>
+    </main>
+  );
 }
 
-function ForgotPassword({onBack}:{onBack:()=>void}){
-  const hint=savedLoginHint();const[form,setForm]=useState({company_code:hint.company,email:"",password:"",confirm:""});const[username,setUsername]=useState("");const[error,setError]=useState("");const[loading,setLoading]=useState(false);const[done,setDone]=useState(false);
-  async function submit(e:FormEvent){e.preventDefault();setError("");if(form.password.length<8)return setError("Use pelo menos 8 caracteres.");if(form.password!==form.confirm)return setError("As senhas não coincidem.");setLoading(true);const{data,error}=await supabase.functions.invoke("reset-password",{body:{company_code:form.company_code,email:form.email,new_password:form.password}});setLoading(false);if(error)return setError(await functionErrorMessage(error,"Não foi possível redefinir a senha."));setUsername(data.username);localStorage.setItem(LOGIN_HINT_KEY,JSON.stringify({company:form.company_code,username:data.username}));setDone(true)}
-  if(done)return <main className="auth-stage"><section className="auth-card"><Brand/><div className="auth-copy"><span><Check/></span><h1>Senha atualizada</h1><p>Seu usuário é <b>{username}</b>. Ele já ficou preenchido no login.</p></div><Button className="full-button" onClick={onBack}>Entrar agora</Button></section></main>;
-  return <main className="auth-stage"><section className="auth-card"><Brand/><button className="back-link" onClick={onBack}>← Voltar</button><div className="auth-copy recovery-copy"><span><KeyRound/></span><h1>Redefinir senha</h1><p>Informe o e-mail cadastrado.</p></div><form onSubmit={submit}><label>Código da empresa<Input required minLength={4} maxLength={12} placeholder="Ex.: NORTE01" value={form.company_code} onChange={e=>setForm({...form,company_code:e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"")})}/></label><label>E-mail cadastrado<Input required type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value.toLowerCase()})}/></label><label>Nova senha<PasswordInput required minLength={8} value={form.password} onChange={e=>setForm({...form,password:e.target.value})} autoComplete="new-password"/></label><label>Confirmar nova senha<PasswordInput required minLength={8} value={form.confirm} onChange={e=>setForm({...form,confirm:e.target.value})} autoComplete="new-password"/></label><ErrorBox message={error}/><Button disabled={loading}>{loading?"Salvando…":"Salvar nova senha"}</Button></form></section></main>;
+function ForgotPassword({ onBack }: { onBack: () => void }) {
+  const hint = savedLoginHint();
+  const [form, setForm] = useState({
+    company_code: hint.company,
+    email: "",
+    password: "",
+    confirm: "",
+  });
+  const [username, setUsername] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (form.password.length < 8)
+      return setError("Use pelo menos 8 caracteres.");
+    if (form.password !== form.confirm)
+      return setError("As senhas não coincidem.");
+    setLoading(true);
+    const { data, error } = await supabase.functions.invoke("reset-password", {
+      body: {
+        company_code: form.company_code,
+        email: form.email,
+        new_password: form.password,
+      },
+    });
+    setLoading(false);
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível redefinir a senha.",
+        ),
+      );
+    setUsername(data.username);
+    localStorage.setItem(
+      LOGIN_HINT_KEY,
+      JSON.stringify({ company: form.company_code, username: data.username }),
+    );
+    setDone(true);
+  }
+  if (done)
+    return (
+      <main className="auth-stage">
+        <section className="auth-card">
+          <Brand />
+          <div className="auth-copy">
+            <span>
+              <Check />
+            </span>
+            <h1>Senha atualizada</h1>
+            <p>
+              Seu usuário é <b>{username}</b>. Ele já ficou preenchido no login.
+            </p>
+          </div>
+          <Button className="full-button" onClick={onBack}>
+            Entrar agora
+          </Button>
+        </section>
+      </main>
+    );
+  return (
+    <main className="auth-stage">
+      <section className="auth-card">
+        <Brand />
+        <button className="back-link" onClick={onBack}>
+          ← Voltar
+        </button>
+        <div className="auth-copy recovery-copy">
+          <span>
+            <KeyRound />
+          </span>
+          <h1>Redefinir senha</h1>
+          <p>Informe o e-mail cadastrado.</p>
+        </div>
+        <form onSubmit={submit}>
+          <label>
+            Código da empresa
+            <Input
+              required
+              minLength={4}
+              maxLength={12}
+              placeholder="Ex.: NORTE01"
+              value={form.company_code}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  company_code: e.target.value
+                    .toUpperCase()
+                    .replace(/[^A-Z0-9]/g, ""),
+                })
+              }
+            />
+          </label>
+          <label>
+            E-mail cadastrado
+            <Input
+              required
+              type="email"
+              value={form.email}
+              onChange={(e) =>
+                setForm({ ...form, email: e.target.value.toLowerCase() })
+              }
+            />
+          </label>
+          <label>
+            Nova senha
+            <PasswordInput
+              required
+              minLength={8}
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              autoComplete="new-password"
+            />
+          </label>
+          <label>
+            Confirmar nova senha
+            <PasswordInput
+              required
+              minLength={8}
+              value={form.confirm}
+              onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+              autoComplete="new-password"
+            />
+          </label>
+          <ErrorBox message={error} />
+          <Button disabled={loading}>
+            {loading ? "Salvando…" : "Salvar nova senha"}
+          </Button>
+        </form>
+      </section>
+    </main>
+  );
 }
 
-function CompanySignup({onBack,onDone}:{onBack:()=>void;onDone:()=>void}){
-  const[created,setCreated]=useState<any>(null);const[form,setForm]=useState({legal_name:"",trade_name:"",tax_id:"",owner_name:"",owner_username:"admin",owner_email:"",owner_password:""});const[error,setError]=useState("");const[loading,setLoading]=useState(false);
-  async function submit(e:FormEvent){e.preventDefault();setLoading(true);setError("");const{data,error}=await supabase.functions.invoke("register-company",{body:form});setLoading(false);if(error)return setError(await functionErrorMessage(error,"Não foi possível cadastrar sua empresa."));localStorage.setItem(LOGIN_HINT_KEY,JSON.stringify({company:data.company_code,username:data.username}));setCreated(data)}
-  async function enter(){if(!created)return;setLoading(true);setError("");const{error}=await supabase.auth.signInWithPassword({email:employeeLoginEmail(created.company_code,created.username),password:form.owner_password});setLoading(false);if(error)return setError("A empresa foi criada, mas não foi possível entrar automaticamente. Volte ao login e use os dados exibidos.");onDone()}
-  if(created)return <main className="auth-stage"><section className="auth-card signup-success"><Brand/><div className="auth-copy"><span><Check/></span><h1>Empresa pronta para usar</h1><p>Sem fila de aprovação. Seu período gratuito já começou.</p></div><div className="company-code-result">{created.company_code}</div><p className="muted-text">Código da empresa<br/>Usuário inicial: <b>{created.username}</b><br/>Teste gratuito até: <b>{dateLabel(created.trial_until)}</b></p><ErrorBox message={error}/><Button disabled={loading} onClick={enter}>{loading?"Entrando…":"Entrar no painel"}</Button><Button variant="outline" onClick={onBack}>Voltar ao login</Button></section></main>;
-  return <main className="auth-stage"><section className="auth-card signup-card"><Brand/><button className="back-link" onClick={onBack}>← Voltar ao login</button><div className="auth-copy"><span><Building2/></span><h1>Criar conta da empresa</h1><p>Preencha uma vez. A conta fica pronta na hora, sem código de ativação.</p></div><form className="form-grid" onSubmit={submit}><label>Nome fantasia<Input required autoComplete="organization" value={form.trade_name} onChange={e=>setForm({...form,trade_name:e.target.value})}/></label><label>Razão social<Input required value={form.legal_name} onChange={e=>setForm({...form,legal_name:e.target.value})}/></label><label>CNPJ ou CPF<Input required inputMode="numeric" value={form.tax_id} onChange={e=>setForm({...form,tax_id:e.target.value})}/></label><label>Nome do responsável<Input required autoComplete="name" value={form.owner_name} onChange={e=>setForm({...form,owner_name:e.target.value})}/></label><label>E-mail de recuperação<Input required type="email" autoComplete="email" value={form.owner_email} onChange={e=>setForm({...form,owner_email:e.target.value.toLowerCase()})}/></label><label>Usuário<Input required minLength={3} autoComplete="username" value={form.owner_username} onChange={e=>setForm({...form,owner_username:e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g,"")})}/></label><label className="full-row">Senha<PasswordInput required minLength={8} autoComplete="new-password" value={form.owner_password} onChange={e=>setForm({...form,owner_password:e.target.value})}/><small>Use pelo menos 8 caracteres. Você poderá alterar depois.</small></label><div className="full-row signup-trial-note"><ShieldCheck/><span><b>30 dias gratuitos</b><small>O acesso é liberado imediatamente. A contratação será combinada depois.</small></span></div><ErrorBox message={error}/><DialogFooter className="full-row"><Button disabled={loading}>{loading?"Criando conta…":"Criar e começar agora"}</Button></DialogFooter></form></section></main>
-}
-
-function LicenseActivation({ctx,onDone}:{ctx:Context;onDone:()=>void}){
-  const[code,setCode]=useState("");const[error,setError]=useState("");const[loading,setLoading]=useState(false);
-  async function activate(e:FormEvent){e.preventDefault();setLoading(true);setError("");const{error}=await supabase.functions.invoke("activate-license",{body:{code}});setLoading(false);if(error)return setError(await functionErrorMessage(error,"Não foi possível ativar a licença."));onDone()}
-  return <main className="auth-stage"><section className="auth-card"><Brand/><div className="auth-copy"><span><ShieldCheck/></span><h1>Ative sua licença</h1><p>A licença de {ctx.organization.trade_name} está {ctx.organization.license_status==="suspended"?"suspensa":"pendente"}. Solicite ao atendimento um novo código.</p></div><form onSubmit={activate}><label>Código de ativação<Input required maxLength={5} value={code} onChange={e=>setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))} className="license-input"/></label><ErrorBox message={error}/><Button disabled={loading||code.length!==5}>{loading?"Validando…":"Ativar licença"}</Button><Button type="button" variant="outline" onClick={()=>supabase.auth.signOut().then(()=>location.reload())}>Sair</Button></form></section></main>
-}
-
-function ChangePassword({employee,onDone}:{employee:any;onDone:()=>void}){
-  const [password,setPassword]=useState(""); const [confirm,setConfirm]=useState(""); const [error,setError]=useState("");
-  async function submit(e:FormEvent){
-    e.preventDefault(); setError("");
-    if(password.length<8) return setError("Use pelo menos 8 caracteres.");
-    if(password!==confirm) return setError("As senhas não coincidem.");
-    const {error:authError}=await supabase.auth.updateUser({password});
-    if(authError) return setError(authError.message);
-    const {error:updateError}=await supabase.functions.invoke("complete-first-access");
-    if(updateError) return setError(updateError.message);
+function CompanySignup({
+  onBack,
+  onDone,
+}: {
+  onBack: () => void;
+  onDone: () => void;
+}) {
+  const [created, setCreated] = useState<any>(null);
+  const [form, setForm] = useState({
+    legal_name: "",
+    trade_name: "",
+    tax_id: "",
+    owner_name: "",
+    owner_username: "admin",
+    owner_email: "",
+    owner_password: "",
+  });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    const { data, error } = await supabase.functions.invoke(
+      "register-company",
+      { body: form },
+    );
+    setLoading(false);
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível cadastrar sua empresa.",
+        ),
+      );
+    localStorage.setItem(
+      LOGIN_HINT_KEY,
+      JSON.stringify({ company: data.company_code, username: data.username }),
+    );
+    setCreated(data);
+  }
+  async function enter() {
+    if (!created) return;
+    setLoading(true);
+    setError("");
+    const { error } = await supabase.auth.signInWithPassword({
+      email: employeeLoginEmail(created.company_code, created.username),
+      password: form.owner_password,
+    });
+    setLoading(false);
+    if (error)
+      return setError(
+        "A empresa foi criada, mas não foi possível entrar automaticamente. Volte ao login e use os dados exibidos.",
+      );
     onDone();
   }
-  return <main className="auth-stage"><section className="auth-card"><Brand/><div className="auth-copy"><span><ShieldCheck/></span><h1>Crie sua nova senha</h1><p>A senha provisória só pode ser usada no primeiro acesso.</p></div><form onSubmit={submit}><label>Nova senha<PasswordInput value={password} onChange={e=>setPassword(e.target.value)}/></label><label>Confirmar senha<PasswordInput value={confirm} onChange={e=>setConfirm(e.target.value)}/></label><ErrorBox message={error}/><Button>Salvar nova senha</Button></form></section></main>
+  if (created)
+    return (
+      <main className="auth-stage">
+        <section className="auth-card signup-success">
+          <Brand />
+          <div className="auth-copy">
+            <span>
+              <Check />
+            </span>
+            <h1>Empresa pronta para usar</h1>
+            <p>Sem fila de aprovação. Seu período gratuito já começou.</p>
+          </div>
+          <div className="company-code-result">{created.company_code}</div>
+          <p className="muted-text">
+            Código da empresa
+            <br />
+            Usuário inicial: <b>{created.username}</b>
+            <br />
+            Teste gratuito até: <b>{dateLabel(created.trial_until)}</b>
+          </p>
+          <ErrorBox message={error} />
+          <Button disabled={loading} onClick={enter}>
+            {loading ? "Entrando…" : "Entrar no painel"}
+          </Button>
+          <Button variant="outline" onClick={onBack}>
+            Voltar ao login
+          </Button>
+        </section>
+      </main>
+    );
+  return (
+    <main className="auth-stage">
+      <section className="auth-card signup-card">
+        <Brand />
+        <button className="back-link" onClick={onBack}>
+          ← Voltar ao login
+        </button>
+        <div className="auth-copy">
+          <span>
+            <Building2 />
+          </span>
+          <h1>Criar conta da empresa</h1>
+          <p>
+            Preencha uma vez. A conta fica pronta na hora, sem código de
+            ativação.
+          </p>
+        </div>
+        <form className="form-grid" onSubmit={submit}>
+          <label>
+            Nome fantasia
+            <Input
+              required
+              autoComplete="organization"
+              value={form.trade_name}
+              onChange={(e) => setForm({ ...form, trade_name: e.target.value })}
+            />
+          </label>
+          <label>
+            Razão social
+            <Input
+              required
+              value={form.legal_name}
+              onChange={(e) => setForm({ ...form, legal_name: e.target.value })}
+            />
+          </label>
+          <label>
+            CNPJ ou CPF
+            <Input
+              required
+              inputMode="numeric"
+              value={form.tax_id}
+              onChange={(e) => setForm({ ...form, tax_id: e.target.value })}
+            />
+          </label>
+          <label>
+            Nome do responsável
+            <Input
+              required
+              autoComplete="name"
+              value={form.owner_name}
+              onChange={(e) => setForm({ ...form, owner_name: e.target.value })}
+            />
+          </label>
+          <label>
+            E-mail de recuperação
+            <Input
+              required
+              type="email"
+              autoComplete="email"
+              value={form.owner_email}
+              onChange={(e) =>
+                setForm({ ...form, owner_email: e.target.value.toLowerCase() })
+              }
+            />
+          </label>
+          <label>
+            Usuário
+            <Input
+              required
+              minLength={3}
+              autoComplete="username"
+              value={form.owner_username}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  owner_username: e.target.value
+                    .toLowerCase()
+                    .replace(/[^a-z0-9._-]/g, ""),
+                })
+              }
+            />
+          </label>
+          <label className="full-row">
+            Senha
+            <PasswordInput
+              required
+              minLength={8}
+              autoComplete="new-password"
+              value={form.owner_password}
+              onChange={(e) =>
+                setForm({ ...form, owner_password: e.target.value })
+              }
+            />
+            <small>
+              Use pelo menos 8 caracteres. Você poderá alterar depois.
+            </small>
+          </label>
+          <div className="full-row signup-trial-note">
+            <ShieldCheck />
+            <span>
+              <b>30 dias gratuitos</b>
+              <small>
+                O acesso é liberado imediatamente. A contratação será combinada
+                depois.
+              </small>
+            </span>
+          </div>
+          <ErrorBox message={error} />
+          <DialogFooter className="full-row">
+            <Button disabled={loading}>
+              {loading ? "Criando conta…" : "Criar e começar agora"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </section>
+    </main>
+  );
 }
 
-function Dashboard({ctx}:{ctx:Context}){
-  const [stats,setStats]=useState({employees:0,entries:0,pending:0,departments:0});
-  useEffect(()=>{(async()=>{
-    const org=ctx.organization.id;
-    const [employees,entries,pending,departments]=await Promise.all([
-      supabase.from("employees").select("*",{count:"exact",head:true}).eq("organization_id",org).eq("status","active"),
-      supabase.from("time_entries").select("*",{count:"exact",head:true}).eq("organization_id",org).gte("occurred_at",todayStart()),
-      supabase.from("justifications").select("*",{count:"exact",head:true}).eq("organization_id",org).eq("status","pending"),
-      supabase.from("departments").select("*",{count:"exact",head:true}).eq("organization_id",org).eq("active",true),
-    ]);
-    setStats({employees:employees.count??0,entries:entries.count??0,pending:pending.count??0,departments:departments.count??0});
-  })()},[ctx.organization.id]);
-  return <><PageHead title="Hoje" desc={new Intl.DateTimeFormat("pt-BR",{dateStyle:"full"}).format(new Date())}/><section className="metrics">
-    {[[""+stats.employees,"Funcionários ativos","Equipe cadastrada"],[""+stats.entries,"Registros hoje","Recebidos pelo aplicativo"],[""+stats.pending,"Pendências","Aguardando análise"],[""+stats.departments,"Setores ativos","Estrutura da empresa"]].map((m,i)=><article key={m[1]}><span className={"metric-mark m"+i}/><div><b>{m[0]}</b><p>{m[1]}</p><small>{m[2]}</small></div></article>)}
-  </section><section className="permission-note"><ShieldCheck/><div><b>Operação em produção</b><p>Os dados exibidos pertencem a {ctx.organization.trade_name}. Seu acesso é limitado ao perfil {labels[ctx.member.role]}.</p></div></section></>
-}
-
-function Employees({ctx}:{ctx:Context}){
-  const [rows,setRows]=useState<any[]>([]); const [departments,setDepartments]=useState<any[]>([]); const [schedules,setSchedules]=useState<any[]>([]);const[policies,setPolicies]=useState<any[]>([]);
-  const [q,setQ]=useState(""); const [open,setOpen]=useState(false); const [editing,setEditing]=useState<any|null>(null);const[recordEmployee,setRecordEmployee]=useState<any|null>(null);const[qrEmployee,setQrEmployee]=useState<any|null>(null);const[qrImage,setQrImage]=useState("");const[issuedAccess,setIssuedAccess]=useState<any|null>(null);const [error,setError]=useState(""); const [loading,setLoading]=useState(false);
-  const blank={full_name:"",username:"",employee_code:"",cpf:"",birth_date:"",gender:"",hired_at:"",job_title:"",cbo_code:"",cbo_title:"",email:"",phone:"",department_id:ctx.member.role==="manager"?(ctx.member.department_id||""):"",schedule_id:"",overtime_mode:"bank",overtime_policy_id:"",role:"employee",password:""};
-  const [form,setForm]=useState(blank);
-  const[editForm,setEditForm]=useState(blank);
-  const load=useCallback(async()=>{
-    const org=ctx.organization.id;
-    const [e,d,s,p]=await Promise.all([
-      supabase.from("employees").select("*,departments(name),work_schedules(name,start_time,end_time),overtime_policies(name)").eq("organization_id",org).order("full_name"),
-      supabase.from("departments").select("*").eq("organization_id",org).eq("active",true).order("name"),
-      supabase.from("work_schedules").select("*").eq("organization_id",org).eq("active",true).order("name"),
-      supabase.from("overtime_policies").select("*").eq("organization_id",org).eq("active",true).order("name"),
-    ]); setRows(e.data??[]);setDepartments(d.data??[]);setSchedules(s.data??[]);setPolicies(p.data??[]);
-  },[ctx.organization.id]);
-  useEffect(()=>{load()},[load]);
-  async function create(e:FormEvent){
-    e.preventDefault();setLoading(true);setError("");
-    const {data,error}=await supabase.functions.invoke("manage-user",{body:{...form,organization_id:ctx.organization.id,department_id:form.department_id||null,schedule_id:form.schedule_id||null,overtime_policy_id:form.overtime_policy_id||policies[0]?.id||null}});
-    setLoading(false);if(error)return setError(await functionErrorMessage(error,"Não foi possível cadastrar o funcionário."));
-    setIssuedAccess(data);setOpen(false);setForm(blank);load();
+function LicenseActivation({
+  ctx,
+  onDone,
+}: {
+  ctx: Context;
+  onDone: () => void;
+}) {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  async function activate(e: FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    const { error } = await supabase.functions.invoke("activate-license", {
+      body: { code },
+    });
+    setLoading(false);
+    if (error)
+      return setError(
+        await functionErrorMessage(error, "Não foi possível ativar a licença."),
+      );
+    onDone();
   }
-  function beginEdit(row:any){setError("");setEditForm({...blank,...row,cbo_code:formatCbo(row.cbo_code),department_id:row.department_id??"",schedule_id:row.schedule_id??"",password:""});setEditing(row)}
-  async function saveEdit(e:FormEvent){e.preventDefault();if(!editing)return;setLoading(true);setError("");const{error}=await supabase.functions.invoke("manage-user",{body:{...editForm,action:"update",organization_id:ctx.organization.id,employee_id:editing.id,cbo_code:normalizeCbo(editForm.cbo_code),department_id:editForm.department_id||null,schedule_id:editForm.schedule_id||null,overtime_policy_id:editForm.overtime_policy_id||policies[0]?.id||null}});setLoading(false);if(error)return setError(await functionErrorMessage(error,"Não foi possível atualizar o funcionário."));setEditing(null);load()}
-  async function showQr(row:any){setQrEmployee(row);setQrImage(await QRCode.toDataURL(employeeQrPayload(ctx.organization.id,row),{width:420,margin:2,color:{dark:"#0b2e4c",light:"#ffffff"}}))}
-  async function rotateQr(){if(!qrEmployee||!window.confirm(`Renovar o QR Code de ${qrEmployee.full_name}? O código anterior deixará de funcionar.`))return;setLoading(true);const{data,error}=await supabase.functions.invoke("manage-user",{body:{action:"rotate_qr",organization_id:ctx.organization.id,employee_id:qrEmployee.id}});setLoading(false);if(error)return setError(await functionErrorMessage(error,"Não foi possível renovar o QR Code."));const updated={...qrEmployee,personal_qr_token:data.personal_qr_token};setQrEmployee(updated);setQrImage(await QRCode.toDataURL(employeeQrPayload(ctx.organization.id,updated),{width:420,margin:2,color:{dark:"#0b2e4c",light:"#ffffff"}}));load()}
-  function downloadQr(){if(!qrImage||!qrEmployee)return;const link=document.createElement("a");link.href=qrImage;link.download=`QR-${qrEmployee.employee_code}-${qrEmployee.full_name.replace(/[^a-zA-Z0-9]+/g,"-")}.png`;link.click()}
-  async function setStatus(row:any,status:"active"|"inactive"|"terminated"){const reason=status==="terminated"?(window.prompt("Motivo do desligamento:")||""):null;if(status==="terminated"&&!reason)return;const{error}=await supabase.functions.invoke("manage-user",{body:{action:"set_status",organization_id:ctx.organization.id,employee_id:row.id,status,termination_reason:reason}});if(error)setError(await functionErrorMessage(error,"Não foi possível alterar a situação."));else load()}
-  async function remove(row:any){if(!window.confirm(`Excluir definitivamente o perfil de ${row.full_name}? Os registros relacionados também serão removidos.`))return;const{error}=await supabase.functions.invoke("manage-user",{body:{action:"delete",organization_id:ctx.organization.id,employee_id:row.id}});if(error)setError(await functionErrorMessage(error,"Não foi possível excluir."));else load()}
-  const filtered=rows.filter(r=>(r.full_name+r.username+(r.job_title??"")+(r.cbo_code??"")+(r.cbo_title??"")+(r.departments?.name??"")).toLowerCase().includes(q.toLowerCase()));
-  const canCreate=roleCanManage(ctx.member.role)||ctx.member.role==="manager";
-  return <><PageHead title="Funcionários" desc="Ficha cadastral, CBO, jornada, horas extras, acesso e QR individual" action={canCreate?<Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button><UserPlus/>Adicionar funcionário</Button></DialogTrigger><DialogContent className="employee-dialog">
-  <DialogHeader className="employee-dialog-head">
-    <span className="employee-dialog-icon"><UserPlus/></span>
-    <div><DialogTitle>Novo funcionário</DialogTitle><DialogDescription>Crie o vínculo e o acesso. No primeiro login, o funcionário completa contato e endereço.</DialogDescription></div>
-  </DialogHeader>
-  <form className="employee-dialog-form" onSubmit={create}>
-    <div className="employee-dialog-scroll">
-      <section className="employee-form-section">
-        <header><span>1</span><div><b>Identificação</b><small>Dados básicos para localizar o colaborador.</small></div></header>
-        <div className="form-grid employee-form">
-          <label>Nome completo<Input autoComplete="name" required value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/></label>
-          <label>CPF (opcional neste momento)<Input inputMode="numeric" maxLength={14} placeholder="Pode ser informado depois pelo RH" value={form.cpf} onChange={e=>setForm({...form,cpf:e.target.value})}/></label>
-          <label>Matrícula<Input required value={form.employee_code} onChange={e=>setForm({...form,employee_code:e.target.value})}/></label>
-          <label>Usuário<Input required autoCapitalize="none" autoComplete="username" value={form.username} onChange={e=>setForm({...form,username:e.target.value.toLowerCase()})}/></label>
-          <label>Data de nascimento<Input type="date" value={form.birth_date} onChange={e=>setForm({...form,birth_date:e.target.value})}/></label>
-          <label>Data de admissão<Input type="date" value={form.hired_at} onChange={e=>setForm({...form,hired_at:e.target.value})}/></label>
-          <label>Gênero<select value={form.gender} onChange={e=>setForm({...form,gender:e.target.value})}><option value="">Não informado</option><option value="female">Feminino</option><option value="male">Masculino</option><option value="other">Outro</option><option value="not_disclosed">Prefere não informar</option></select></label>
+  return (
+    <main className="auth-stage">
+      <section className="auth-card">
+        <Brand />
+        <div className="auth-copy">
+          <span>
+            <ShieldCheck />
+          </span>
+          <h1>Ative sua licença</h1>
+          <p>
+            A licença de {ctx.organization.trade_name} está{" "}
+            {ctx.organization.license_status === "suspended"
+              ? "suspensa"
+              : "pendente"}
+            . Solicite ao atendimento um novo código.
+          </p>
         </div>
+        <form onSubmit={activate}>
+          <label>
+            Código de ativação
+            <Input
+              required
+              maxLength={5}
+              value={code}
+              onChange={(e) =>
+                setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))
+              }
+              className="license-input"
+            />
+          </label>
+          <ErrorBox message={error} />
+          <Button disabled={loading || code.length !== 5}>
+            {loading ? "Validando…" : "Ativar licença"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              supabase.auth.signOut().then(() => location.reload())
+            }
+          >
+            Sair
+          </Button>
+        </form>
       </section>
-      <section className="employee-form-section">
-        <header><span>2</span><div><b>Trabalho</b><small>Cargo, ocupação, setor e jornada contratual.</small></div></header>
-        <div className="form-grid employee-form">
-          <label>Cargo na empresa<Input value={form.job_title} onChange={e=>setForm({...form,job_title:e.target.value})}/></label>
-          <label>Código CBO<Input list="cbo-create-options" inputMode="numeric" placeholder="Ex.: 4110-10" value={form.cbo_code} onChange={e=>{const code=formatCbo(e.target.value);setForm({...form,cbo_code:code,cbo_title:cboTitleFor(code)||form.cbo_title})}}/></label>
-          <label className="full-row">Ocupação CBO<Input placeholder="Ex.: Assistente administrativo" value={form.cbo_title} onChange={e=>setForm({...form,cbo_title:e.target.value})}/><datalist id="cbo-create-options">{commonCboOptions.map(item=><option key={item.code} value={formatCbo(item.code)}>{item.title}</option>)}</datalist></label>
-          <label>Setor<select disabled={ctx.member.role==="manager"} value={form.department_id} onChange={e=>setForm({...form,department_id:e.target.value})}><option value="">Sem setor</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
-          <label>Jornada<select value={form.schedule_id} onChange={e=>setForm({...form,schedule_id:e.target.value})}><option value="">Sem jornada</option>{schedules.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-          <label>Perfil<select disabled={ctx.member.role==="manager"} value={form.role} onChange={e=>setForm({...form,role:e.target.value})}><option value="employee">Funcionário</option><option value="manager">Líder de setor</option><option value="hr_agent">Equipe de RH</option><option value="hr_admin">Administrador de RH</option></select></label>
-        </div>
-      </section>
-      <section className="employee-form-section overtime-employee-section">
-        <header><span>3</span><div><b>Horas extras e banco</b><small>Escolha como os saldos deste colaborador serão tratados.</small></div></header>
-        <div className="form-grid employee-form">
-          <label>Destino das horas extras<select value={form.overtime_mode} onChange={e=>setForm({...form,overtime_mode:e.target.value})}><option value="bank">Levar para o banco de horas</option><option value="pay">Pagar como hora extra</option><option value="disabled">Não controlar automaticamente</option></select></label>
-          <label>Regra de adicionais<select disabled={form.overtime_mode==="disabled"} value={form.overtime_policy_id||policies[0]?.id||""} onChange={e=>setForm({...form,overtime_policy_id:e.target.value})}>{policies.map(policy=><option key={policy.id} value={policy.id}>{policy.name} · {policy.weekday_percent}% / {policy.holiday_percent}%</option>)}</select></label>
-          <div className="full-row overtime-form-note"><Clock3/><span><b>Cálculo transparente</b><small>O PontoNorte separa automaticamente horas normais, extra 50%, extra 100%, créditos e débitos. O RH pode ajustar datas especiais no Banco de horas.</small></span></div>
-        </div>
-      </section>
-      <section className="employee-form-section">
-        <header><span>4</span><div><b>Acesso e contato</b><small>Credenciais provisórias e formas de contato.</small></div></header>
-        <div className="form-grid employee-form">
-          <label className="full-row">Senha provisória (opcional)<PasswordInput minLength={8} autoComplete="new-password" placeholder="Deixe em branco para gerar automaticamente" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/><small>O sistema mostra a senha uma vez para o RH entregar ao funcionário.</small></label>
-        </div>
-      </section>
-    </div>
-    <ErrorBox message={error}/>
-    <DialogFooter className="employee-dialog-actions"><Button type="button" variant="outline" onClick={()=>setOpen(false)}>Cancelar</Button><Button disabled={loading}>{loading?"Criando…":"Criar acesso e QR"}</Button></DialogFooter>
-  </form>
-</DialogContent></Dialog>:undefined}/>{issuedAccess&&<section className="issued-access"><ShieldCheck/><div><b>Acesso criado para {issuedAccess.full_name}</b><p>Empresa: <strong>{issuedAccess.company_code}</strong> · Usuário: <strong>{issuedAccess.username}</strong> · Senha provisória: <strong>{issuedAccess.temporary_password}</strong></p><small>Entregue estes três dados ao funcionário. No primeiro acesso ele troca a senha.</small></div><button onClick={()=>setIssuedAccess(null)} aria-label="Fechar"><X/></button></section>}<ErrorBox message={error}/><section className="surface table-surface"><div className="table-tools"><label><Search/><Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar funcionário, cargo ou CBO"/></label><Button variant="outline" onClick={load}><RefreshCw/>Atualizar</Button></div><div className="responsive-table"><Table><TableHeader><TableRow><TableHead>Funcionário</TableHead><TableHead>Matrícula / CPF</TableHead><TableHead>Cargo / CBO</TableHead><TableHead>Setor</TableHead><TableHead>Jornada</TableHead><TableHead>Horas extras</TableHead><TableHead>Situação</TableHead><TableHead>Ações</TableHead></TableRow></TableHeader><TableBody>{filtered.map(r=><TableRow key={r.id}><TableCell><div className="person-cell"><span className="avatar">{initials(r.full_name)}</span><p><b>{r.full_name}</b><small>{r.username}</small></p></div></TableCell><TableCell>{r.employee_code}<br/><small>{r.cpf||"CPF não informado"}</small></TableCell><TableCell><b>{r.job_title||"Sem cargo"}</b><br/><small>{r.cbo_code?`${formatCbo(r.cbo_code)} · ${r.cbo_title||"Ocupação não informada"}`:"CBO não informado"}</small></TableCell><TableCell>{r.departments?.name||"—"}</TableCell><TableCell>{r.work_schedules?.name||"—"}</TableCell><TableCell><Badge color={r.overtime_mode==="bank"?"blue":r.overtime_mode==="pay"?"green":"gray"}>{overtimeModeLabels[r.overtime_mode]??"Banco de horas"}</Badge><small className="overtime-policy-name">{r.overtime_policies?.name||"Regra padrão"}</small></TableCell><TableCell><Badge color={r.status==="active"?"green":"gray"}>{r.status==="active"?"Ativo":r.status==="terminated"?"Demitido":r.status}</Badge>{r.termination_reason&&<small className="termination-note">{r.termination_reason}</small>}</TableCell><TableCell><div className="row-actions"><Button size="sm" variant="outline" onClick={()=>setRecordEmployee(r)}><FileText/>Ficha completa</Button><Button size="sm" variant="outline" onClick={()=>beginEdit(r)}><Pencil/>Editar</Button><Button size="sm" variant="outline" onClick={()=>showQr(r)}><QrCode/>QR individual</Button>{r.status==="active"?<Button size="sm" variant="outline" onClick={()=>setStatus(r,"terminated")}>Desligar</Button>:<Button size="sm" variant="outline" onClick={()=>setStatus(r,"active")}>Reativar</Button>}{["platform_admin","company_owner","hr_admin"].includes(ctx.member.role)&&<Button size="sm" variant="outline" onClick={()=>remove(r)}>Excluir</Button>}</div></TableCell></TableRow>)}</TableBody></Table></div></section><Dialog open={!!editing} onOpenChange={value=>{if(!value)setEditing(null)}}><DialogContent className="wide-dialog responsive-dialog"><DialogHeader><DialogTitle>Editar funcionário</DialogTitle><DialogDescription>Atualize a ficha, o cargo, o CBO, o setor ou a jornada sem recriar o acesso.</DialogDescription></DialogHeader><form className="form-grid employee-form" onSubmit={saveEdit}><label>Nome completo<Input required value={editForm.full_name} onChange={e=>setEditForm({...editForm,full_name:e.target.value})}/></label><label>CPF<Input inputMode="numeric" maxLength={14} value={editForm.cpf??""} onChange={e=>setEditForm({...editForm,cpf:e.target.value})}/></label><label>Matrícula<Input required value={editForm.employee_code} onChange={e=>setEditForm({...editForm,employee_code:e.target.value})}/></label><label>Cargo na empresa<Input value={editForm.job_title??""} onChange={e=>setEditForm({...editForm,job_title:e.target.value})}/></label><label>Código CBO<Input list="cbo-edit-options" inputMode="numeric" placeholder="Ex.: 4110-10" value={editForm.cbo_code} onChange={e=>{const code=formatCbo(e.target.value);setEditForm({...editForm,cbo_code:code,cbo_title:cboTitleFor(code)||editForm.cbo_title})}}/></label><label>Ocupação CBO<Input value={editForm.cbo_title??""} onChange={e=>setEditForm({...editForm,cbo_title:e.target.value})}/><datalist id="cbo-edit-options">{commonCboOptions.map(item=><option key={item.code} value={formatCbo(item.code)}>{item.title}</option>)}</datalist></label><label>Data de nascimento<Input type="date" value={editForm.birth_date??""} onChange={e=>setEditForm({...editForm,birth_date:e.target.value})}/></label><label>Admissão<Input type="date" value={editForm.hired_at??""} onChange={e=>setEditForm({...editForm,hired_at:e.target.value})}/></label><label>Gênero<select value={editForm.gender??""} onChange={e=>setEditForm({...editForm,gender:e.target.value})}><option value="">Não informado</option><option value="female">Feminino</option><option value="male">Masculino</option><option value="other">Outro</option><option value="not_disclosed">Prefere não informar</option></select></label><label>E-mail pessoal<Input type="email" value={editForm.email??""} onChange={e=>setEditForm({...editForm,email:e.target.value})}/></label><label>Telefone<Input value={editForm.phone??""} onChange={e=>setEditForm({...editForm,phone:e.target.value})}/></label><label>Setor<select disabled={ctx.member.role==="manager"} value={editForm.department_id} onChange={e=>setEditForm({...editForm,department_id:e.target.value})}><option value="">Sem setor</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label>Jornada<select value={editForm.schedule_id} onChange={e=>setEditForm({...editForm,schedule_id:e.target.value})}><option value="">Sem jornada</option>{schedules.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><label>Destino das horas extras<select value={editForm.overtime_mode??"bank"} onChange={e=>setEditForm({...editForm,overtime_mode:e.target.value})}><option value="bank">Banco de horas</option><option value="pay">Pagamento em folha</option><option value="disabled">Não controlar</option></select></label><label>Regra de adicionais<select disabled={editForm.overtime_mode==="disabled"} value={editForm.overtime_policy_id||policies[0]?.id||""} onChange={e=>setEditForm({...editForm,overtime_policy_id:e.target.value})}>{policies.map(policy=><option key={policy.id} value={policy.id}>{policy.name} · {policy.weekday_percent}% / {policy.holiday_percent}%</option>)}</select></label><ErrorBox message={error}/><DialogFooter><Button type="button" variant="outline" onClick={()=>setEditing(null)}>Cancelar</Button><Button disabled={loading}>{loading?"Salvando…":"Salvar alterações"}</Button></DialogFooter></form></DialogContent></Dialog><Dialog open={!!qrEmployee} onOpenChange={value=>{if(!value){setQrEmployee(null);setQrImage("")}}}><DialogContent className="employee-qr-dialog"><DialogHeader><DialogTitle>QR Code individual</DialogTitle><DialogDescription>Este código pertence somente a {qrEmployee?.full_name}. O aplicativo confirma o usuário conectado antes de registrar o ponto.</DialogDescription></DialogHeader>{qrImage&&<figure className="employee-qr-card"><img src={qrImage} alt={`QR Code individual de ${qrEmployee?.full_name}`}/><figcaption><b>{qrEmployee?.full_name}</b><span>Matrícula {qrEmployee?.employee_code}</span><small>{qrEmployee?.job_title||"Funcionário"}{qrEmployee?.cbo_code?` · CBO ${formatCbo(qrEmployee.cbo_code)}`:""}</small></figcaption></figure>}<DialogFooter><Button type="button" variant="outline" onClick={rotateQr} disabled={loading}><RefreshCw/>Renovar código</Button><Button type="button" onClick={downloadQr}><Download/>Baixar QR</Button></DialogFooter></DialogContent></Dialog><EmployeeRecordDialog open={!!recordEmployee} onOpenChange={value=>{if(!value)setRecordEmployee(null)}} organization={ctx.organization} employee={recordEmployee} schedule={recordEmployee?.work_schedules} canManage={canCreate}/></>
+    </main>
+  );
 }
 
-function Departments({ctx}:{ctx:Context}){
-  const [rows,setRows]=useState<any[]>([]);const [name,setName]=useState("");
-  const load=useCallback(async()=>{const {data}=await supabase.from("departments").select("*,employees(count)").eq("organization_id",ctx.organization.id).order("name");setRows(data??[])},[ctx.organization.id]);
-  useEffect(()=>{load()},[load]);
-  async function add(e:FormEvent){e.preventDefault();await supabase.from("departments").insert({organization_id:ctx.organization.id,name});setName("");load()}
-  return <><PageHead title="Setores e líderes" desc="O líder acessa e confirma somente os pontos do próprio setor" action={roleCanManage(ctx.member.role)?<form className="inline-create" onSubmit={add}><Input required value={name} onChange={e=>setName(e.target.value)} placeholder="Nome do novo setor"/><Button><Plus/>Criar</Button></form>:undefined}/><section className="sector-cards">{rows.map(r=><article className="surface" key={r.id}><header><span className="sector-icon"><UsersRound/></span><Badge color={r.active?"green":"gray"}>{r.active?"Ativo":"Inativo"}</Badge></header><h2>{r.name}</h2><p className="muted-text">{r.description||"Equipe organizada por setor."}</p><dl><div><dt>Funcionários</dt><dd>{r.employees?.[0]?.count??0}</dd></div></dl></article>)}</section></>
+function ChangePassword({
+  employee,
+  onDone,
+}: {
+  employee: any;
+  onDone: () => void;
+}) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (password.length < 8) return setError("Use pelo menos 8 caracteres.");
+    if (password !== confirm) return setError("As senhas não coincidem.");
+    const { error: authError } = await supabase.auth.updateUser({ password });
+    if (authError) return setError(authError.message);
+    const { error: updateError } = await supabase.functions.invoke(
+      "complete-first-access",
+    );
+    if (updateError) return setError(updateError.message);
+    onDone();
+  }
+  return (
+    <main className="auth-stage">
+      <section className="auth-card">
+        <Brand />
+        <div className="auth-copy">
+          <span>
+            <ShieldCheck />
+          </span>
+          <h1>Crie sua nova senha</h1>
+          <p>A senha provisória só pode ser usada no primeiro acesso.</p>
+        </div>
+        <form onSubmit={submit}>
+          <label>
+            Nova senha
+            <PasswordInput
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          <label>
+            Confirmar senha
+            <PasswordInput
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+            />
+          </label>
+          <ErrorBox message={error} />
+          <Button>Salvar nova senha</Button>
+        </form>
+      </section>
+    </main>
+  );
 }
 
-function Devices({ctx}:{ctx:Context}){
-  const[rows,setRows]=useState<any[]>([]);
-  const load=useCallback(async()=>{const{data}=await supabase.from("authorized_devices").select("*,employees(full_name,department_id)").eq("organization_id",ctx.organization.id).order("created_at",{ascending:false});setRows(data??[])},[ctx.organization.id]);
-  useEffect(()=>{load()},[load]);
-  async function setApproval(row:any,approved:boolean){const{data:{user}}=await supabase.auth.getUser();await supabase.from("authorized_devices").update({approved,approved_by:approved?user?.id:null,approved_at:approved?new Date().toISOString():null,revoked_at:approved?null:new Date().toISOString()}).eq("id",row.id);load()}
-  return <><PageHead title="Dispositivos" desc="Autorize os celulares vinculados aos funcionários"/><section className="surface table-surface"><Table><TableHeader><TableRow><TableHead>Funcionário</TableHead><TableHead>Aparelho</TableHead><TableHead>Plataforma</TableHead><TableHead>Último acesso</TableHead><TableHead>Status</TableHead><TableHead>Ações</TableHead></TableRow></TableHeader><TableBody>{rows.map(r=><TableRow key={r.id}><TableCell>{r.employees?.full_name}</TableCell><TableCell><b>{r.device_name||"Celular"}</b><br/><small>{r.device_uuid}</small></TableCell><TableCell>{r.platform||"android"}</TableCell><TableCell>{r.last_seen_at?dateTime(r.last_seen_at):"Primeiro acesso"}</TableCell><TableCell><Badge color={r.approved&&!r.revoked_at?"green":"amber"}>{r.approved&&!r.revoked_at?"Autorizado":"Pendente"}</Badge></TableCell><TableCell><Button size="sm" variant="outline" onClick={()=>setApproval(r,!(r.approved&&!r.revoked_at))}>{r.approved&&!r.revoked_at?"Revogar":"Autorizar"}</Button></TableCell></TableRow>)}</TableBody></Table></section></>
-}
-
-function Terminals({ctx}:{ctx:Context}){
-  const[rows,setRows]=useState<any[]>([]);const[open,setOpen]=useState(false);const[error,setError]=useState("");const[saved,setSaved]=useState("");
-  const[form,setForm]=useState({name:"Recepção",code:"recepcao",password:"",location_name:"",radius_meters:150});
-  const load=useCallback(async()=>{const{data}=await supabase.from("terminals").select("*").eq("organization_id",ctx.organization.id).order("created_at",{ascending:false});setRows(data??[])},[ctx.organization.id]);
-  useEffect(()=>{load()},[load]);
-  async function create(e:FormEvent){e.preventDefault();setError("");const{data,error}=await supabase.functions.invoke("provision-terminal",{body:{...form,organization_id:ctx.organization.id}});if(error)return setError(await functionErrorMessage(error,"Não foi possível criar o terminal."));setSaved(`${data.company_code} / ${data.terminal.code}`);setOpen(false);setForm({...form,password:""});load()}
-  async function toggle(r:any){await supabase.from("terminals").update({enabled:!r.enabled}).eq("id",r.id);load()}
-  return <><PageHead title="Terminais da empresa" desc="APK fixo para recepção, portaria ou tablet compartilhado" action={["platform_admin","company_owner","hr_admin"].includes(ctx.member.role)?<Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button><Plus/>Novo terminal</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Criar terminal corporativo</DialogTitle><DialogDescription>Instale o mesmo APK no aparelho da empresa e entre com estas credenciais.</DialogDescription></DialogHeader><form className="form-grid" onSubmit={create}><label>Nome do aparelho<Input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><label>Código do terminal<Input required minLength={3} value={form.code} onChange={e=>setForm({...form,code:e.target.value.toLowerCase()})}/></label><label>Local<Input value={form.location_name} onChange={e=>setForm({...form,location_name:e.target.value})}/></label><label>Raio permitido (metros)<Input type="number" min={20} max={5000} value={form.radius_meters} onChange={e=>setForm({...form,radius_meters:+e.target.value})}/></label><label className="full-row">Senha do terminal<PasswordInput required minLength={10} value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label><ErrorBox message={error}/><DialogFooter><Button>Criar terminal</Button></DialogFooter></form></DialogContent></Dialog>:undefined}/>{saved&&<div className="success-banner"><Check/>Terminal criado. Login no APK: <b>{saved}</b></div>}<section className="surface table-surface"><Table><TableHeader><TableRow><TableHead>Terminal</TableHead><TableHead>Código</TableHead><TableHead>Local</TableHead><TableHead>Aparelho vinculado</TableHead><TableHead>Status</TableHead><TableHead>Ação</TableHead></TableRow></TableHeader><TableBody>{rows.map(r=><TableRow key={r.id}><TableCell><b>{r.name}</b></TableCell><TableCell>{r.code}</TableCell><TableCell>{r.location_name||"Sem restrição"}</TableCell><TableCell>{r.device_uuid||"Vincula no primeiro acesso"}</TableCell><TableCell><Badge color={r.enabled?"green":"gray"}>{r.enabled?"Ativo":"Desativado"}</Badge></TableCell><TableCell><Button size="sm" variant="outline" onClick={()=>toggle(r)}>{r.enabled?"Desativar":"Ativar"}</Button></TableCell></TableRow>)}</TableBody></Table></section></>
-}
-
-
-type TimeBankTab="balances"|"rules"|"calendar";
-function TimeBank({ctx}:{ctx:Context}){
-  const timezone=ctx.organization.timezone||"America/Sao_Paulo";const today=dateKeyInZone(new Date(),timezone);const[month,setMonth]=useState(today.slice(0,7));const[employeeId,setEmployeeId]=useState("all");const[tab,setTab]=useState<TimeBankTab>("balances");
-  const[employees,setEmployees]=useState<any[]>([]);const[daily,setDaily]=useState<any[]>([]);const[balances,setBalances]=useState<any[]>([]);const[policies,setPolicies]=useState<any[]>([]);const[calendar,setCalendar]=useState<any[]>([]);const[adjustments,setAdjustments]=useState<any[]>([]);const[error,setError]=useState("");const[loading,setLoading]=useState(true);
-  const[policyOpen,setPolicyOpen]=useState(false);const[policyForm,setPolicyForm]=useState<any>({id:"",name:"Padrão 50% / 100%",weekday_percent:50,saturday_percent:50,sunday_percent:100,holiday_percent:100,bank_50_multiplier:1,bank_100_multiplier:1,compensation_months:6,active:true});
-  const[calendarOpen,setCalendarOpen]=useState(false);const[calendarForm,setCalendarForm]=useState({rule_date:today,title:"",overtime_percent:100,count_all_worked_as_overtime:true,applies_to_department_id:""});
-  const[adjustOpen,setAdjustOpen]=useState(false);const[adjustForm,setAdjustForm]=useState({employee_id:"",work_date:today,entry_type:"credit",hours:1,reason:""});
-  const canManage=roleCanManage(ctx.member.role);
-  const monthEnd=useMemo(()=>{const[y,m]=month.split("-").map(Number);return `${month}-${String(new Date(Date.UTC(y,m,0)).getUTCDate()).padStart(2,"0")}`},[month]);
-
-  const load=useCallback(async()=>{
-    setLoading(true);setError("");
-    try{
-      let employeeQuery=supabase.from("employees").select("id,full_name,employee_code,department_id,overtime_mode,overtime_policy_id,departments(name),overtime_policies(name)").eq("organization_id",ctx.organization.id).eq("status","active").order("full_name");
-      if(ctx.member.role==="manager"&&ctx.member.department_id)employeeQuery=employeeQuery.eq("department_id",ctx.member.department_id);
-      let dailyQuery=supabase.from("overtime_daily_summary").select("*").eq("organization_id",ctx.organization.id).gte("work_date",month+"-01").lte("work_date",monthEnd).order("work_date",{ascending:false});
-      let adjustmentQuery=supabase.from("time_bank_adjustments").select("*,employees(full_name,employee_code)").eq("organization_id",ctx.organization.id).gte("work_date",month+"-01").lte("work_date",monthEnd).order("work_date",{ascending:false});
-      if(employeeId!=="all"){dailyQuery=dailyQuery.eq("employee_id",employeeId);adjustmentQuery=adjustmentQuery.eq("employee_id",employeeId)}
-      const[e,d,b,p,c,a]=await Promise.all([
-        employeeQuery,fetchSupabaseRows(dailyQuery),supabase.from("employee_time_bank_balance").select("*").eq("organization_id",ctx.organization.id),supabase.from("overtime_policies").select("*").eq("organization_id",ctx.organization.id).order("name"),supabase.from("overtime_calendar_rules").select("*,departments(name)").eq("organization_id",ctx.organization.id).gte("rule_date",month+"-01").lte("rule_date",monthEnd).order("rule_date"),fetchSupabaseRows(adjustmentQuery)
+function Dashboard({ ctx }: { ctx: Context }) {
+  const [stats, setStats] = useState({
+    employees: 0,
+    entries: 0,
+    pending: 0,
+    departments: 0,
+  });
+  useEffect(() => {
+    (async () => {
+      const org = ctx.organization.id;
+      const [employees, entries, pending, departments] = await Promise.all([
+        supabase
+          .from("employees")
+          .select("*", { count: "exact", head: true })
+          .eq("organization_id", org)
+          .eq("status", "active"),
+        supabase
+          .from("time_entries")
+          .select("*", { count: "exact", head: true })
+          .eq("organization_id", org)
+          .gte("occurred_at", todayStart()),
+        supabase
+          .from("justifications")
+          .select("*", { count: "exact", head: true })
+          .eq("organization_id", org)
+          .eq("status", "pending"),
+        supabase
+          .from("departments")
+          .select("*", { count: "exact", head: true })
+          .eq("organization_id", org)
+          .eq("active", true),
       ]);
-      if(e.error||b.error||p.error||c.error)throw new Error(e.error?.message||b.error?.message||p.error?.message||c.error?.message);
-      setEmployees(e.data??[]);setDaily(d);setBalances(b.data??[]);setPolicies(p.data??[]);setCalendar(c.data??[]);setAdjustments(a);
-    }catch(reason){setError(reason instanceof Error?reason.message:"Não foi possível calcular o banco de horas.")}finally{setLoading(false)}
-  },[ctx.member.department_id,ctx.member.role,ctx.organization.id,employeeId,month,monthEnd]);
-  useEffect(()=>{load()},[load]);
-
-  const summaryRows=useMemo(()=>employees.filter(person=>employeeId==="all"||person.id===employeeId).map(person=>{const days=daily.filter(row=>row.employee_id===person.id);const balance=balances.find(row=>row.employee_id===person.id);return{...person,overtime_50:days.reduce((sum,row)=>sum+Number(row.overtime_50_minutes||0),0),overtime_100:days.reduce((sum,row)=>sum+Number(row.overtime_100_minutes||0),0),payable:days.reduce((sum,row)=>sum+Number(row.payable_overtime_minutes||0),0),month_delta:days.reduce((sum,row)=>sum+Number(row.bank_delta_minutes||0),0)+adjustments.filter(item=>item.employee_id===person.id).reduce((sum,item)=>sum+Number(item.minutes||0),0),balance_minutes:Number(balance?.balance_minutes||0),policy_name:relationOne(person.overtime_policies)?.name||"Regra padrão"}}),[adjustments,balances,daily,employeeId,employees]);
-  const totals=useMemo(()=>summaryRows.reduce((acc,row)=>({balance:acc.balance+row.balance_minutes,extra50:acc.extra50+row.overtime_50,extra100:acc.extra100+row.overtime_100,debit:acc.debit+Math.min(row.month_delta,0)}),{balance:0,extra50:0,extra100:0,debit:0}),[summaryRows]);
-  const ledger=useMemo(()=>[...daily.map(row=>({id:"d-"+row.employee_id+"-"+row.work_date,work_date:row.work_date,full_name:row.full_name,kind:`${row.overtime_rule} · ${row.overtime_percent}%`,credit:Number(row.overtime_minutes||0),debit:Number(row.debit_minutes||0),movement:Number(row.bank_delta_minutes||0),automatic:true})),...adjustments.map(item=>({id:item.id,work_date:item.work_date,full_name:relationOne(item.employees)?.full_name||"—",kind:item.reason,credit:Number(item.minutes)>0?Number(item.minutes):0,debit:Number(item.minutes)<0?Math.abs(Number(item.minutes)):0,movement:Number(item.minutes),automatic:false}))].sort((a,b)=>b.work_date.localeCompare(a.work_date)),[adjustments,daily]);
-
-  function newPolicy(){setPolicyForm({id:"",name:"",weekday_percent:50,saturday_percent:50,sunday_percent:100,holiday_percent:100,bank_50_multiplier:1,bank_100_multiplier:1,compensation_months:6,active:true});setPolicyOpen(true)}
-  function editPolicy(policy:any){setPolicyForm({...policy,weekday_percent:Number(policy.weekday_percent),saturday_percent:Number(policy.saturday_percent),sunday_percent:Number(policy.sunday_percent),holiday_percent:Number(policy.holiday_percent),bank_50_multiplier:Number(policy.bank_50_multiplier),bank_100_multiplier:Number(policy.bank_100_multiplier)});setPolicyOpen(true)}
-  async function savePolicy(event:FormEvent){event.preventDefault();setError("");const payload={organization_id:ctx.organization.id,name:policyForm.name,weekday_percent:Number(policyForm.weekday_percent),saturday_percent:Number(policyForm.saturday_percent),sunday_percent:Number(policyForm.sunday_percent),holiday_percent:Number(policyForm.holiday_percent),bank_50_multiplier:Number(policyForm.bank_50_multiplier),bank_100_multiplier:Number(policyForm.bank_100_multiplier),compensation_months:Number(policyForm.compensation_months),active:Boolean(policyForm.active),updated_at:new Date().toISOString()};const result=policyForm.id?await supabase.from("overtime_policies").update(payload).eq("id",policyForm.id):await supabase.from("overtime_policies").insert(payload);if(result.error)return setError(result.error.message);setPolicyOpen(false);load()}
-  async function saveCalendar(event:FormEvent){event.preventDefault();setError("");const{data:{user}}=await supabase.auth.getUser();const{error}=await supabase.from("overtime_calendar_rules").insert({organization_id:ctx.organization.id,rule_date:calendarForm.rule_date,title:calendarForm.title,overtime_percent:Number(calendarForm.overtime_percent),count_all_worked_as_overtime:calendarForm.count_all_worked_as_overtime,applies_to_department_id:calendarForm.applies_to_department_id||null,created_by:user?.id});if(error)return setError(error.message);setCalendarOpen(false);setCalendarForm({...calendarForm,title:""});load()}
-  async function removeCalendar(row:any){if(!confirm(`Excluir a regra de ${dateLabel(row.rule_date)}?`))return;const{error}=await supabase.from("overtime_calendar_rules").delete().eq("id",row.id);if(error)setError(error.message);else load()}
-  async function saveAdjustment(event:FormEvent){event.preventDefault();setError("");const{data:{user}}=await supabase.auth.getUser();const raw=Math.round(Number(adjustForm.hours)*60);const negative=["debit","compensation","payment"].includes(adjustForm.entry_type);const minutesValue=negative?-Math.abs(raw):Math.abs(raw);const{error}=await supabase.from("time_bank_adjustments").insert({organization_id:ctx.organization.id,employee_id:adjustForm.employee_id,work_date:adjustForm.work_date,entry_type:adjustForm.entry_type,minutes:minutesValue,reason:adjustForm.reason,created_by:user?.id});if(error)return setError(error.message);setAdjustOpen(false);setAdjustForm({...adjustForm,hours:1,reason:""});load()}
-
-  return <><PageHead title="Banco de horas" desc="Horas extras 50% e 100%, créditos, débitos e pagamento por colaborador" action={canManage?<Button onClick={()=>{setAdjustForm({...adjustForm,employee_id:employeeId==="all"?"":employeeId});setAdjustOpen(true)}}><Plus/>Lançar ajuste</Button>:undefined}/><div className="time-bank-tabs"><button className={tab==="balances"?"active":""} onClick={()=>setTab("balances")}><History/>Saldos e extrato</button><button className={tab==="rules"?"active":""} onClick={()=>setTab("rules")}><Settings/>Regras de cálculo</button><button className={tab==="calendar"?"active":""} onClick={()=>setTab("calendar")}><CalendarDays/>Calendário 50% / 100%</button></div><ErrorBox message={error}/>
-  {tab==="balances"&&<><section className="surface time-bank-filter"><label>Mês<Input type="month" value={month} onChange={event=>setMonth(event.target.value)}/></label><label>Colaborador<select value={employeeId} onChange={event=>setEmployeeId(event.target.value)}><option value="all">Todos os colaboradores</option>{employees.map(person=><option key={person.id} value={person.id}>{person.full_name} · {person.employee_code}</option>)}</select></label><Button variant="outline" onClick={load} disabled={loading}><RefreshCw className={loading?"spin":""}/>Atualizar</Button></section><section className="metrics time-bank-metrics">{[[minutes(totals.balance),"Saldo acumulado","Créditos menos compensações"],[minutes(totals.extra50),"Extra 50%","No mês selecionado"],[minutes(totals.extra100),"Extra 100%","No mês selecionado"],[minutes(totals.debit),"Débitos do mês","Horas a compensar"]].map((metric,index)=><article key={metric[1]}><span className={"metric-mark m"+index}/><div><b>{metric[0]}</b><p>{metric[1]}</p><small>{metric[2]}</small></div></article>)}</section><section className="surface table-surface"><header className="time-bank-section-head"><div><h2>Resumo por colaborador</h2><p>O saldo acumulado considera todo o histórico e os ajustes manuais.</p></div></header><div className="responsive-table"><Table><TableHeader><TableRow><TableHead>Colaborador</TableHead><TableHead>Destino</TableHead><TableHead>Regra</TableHead><TableHead>Extra 50%</TableHead><TableHead>Extra 100%</TableHead><TableHead>Movimento no mês</TableHead><TableHead>Saldo acumulado</TableHead></TableRow></TableHeader><TableBody>{summaryRows.map(row=><TableRow key={row.id}><TableCell><b>{row.full_name}</b><br/><small>{row.employee_code} · {relationOne(row.departments)?.name||"Sem setor"}</small></TableCell><TableCell><Badge color={row.overtime_mode==="bank"?"blue":row.overtime_mode==="pay"?"green":"gray"}>{overtimeModeLabels[row.overtime_mode]}</Badge></TableCell><TableCell>{row.policy_name}</TableCell><TableCell>{minutes(row.overtime_50)}</TableCell><TableCell>{minutes(row.overtime_100)}</TableCell><TableCell><Badge color={row.month_delta>=0?"green":"amber"}>{minutes(row.month_delta)}</Badge></TableCell><TableCell><b className={row.balance_minutes<0?"negative-balance":"positive-balance"}>{minutes(row.balance_minutes)}</b></TableCell></TableRow>)}</TableBody></Table></div></section><section className="surface table-surface"><header className="time-bank-section-head"><div><h2>Extrato do período</h2><p>Registros automáticos e lançamentos feitos pelo RH.</p></div></header><div className="responsive-table"><Table><TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Colaborador</TableHead><TableHead>Origem</TableHead><TableHead>Crédito</TableHead><TableHead>Débito</TableHead><TableHead>Movimento no banco</TableHead></TableRow></TableHeader><TableBody>{ledger.length?ledger.map(row=><TableRow key={row.id}><TableCell>{dateLabel(row.work_date)}</TableCell><TableCell><b>{row.full_name}</b></TableCell><TableCell>{row.kind}<br/><small>{row.automatic?"Calculado automaticamente":"Lançamento do RH"}</small></TableCell><TableCell>{row.credit?minutes(row.credit):"—"}</TableCell><TableCell>{row.debit?minutes(row.debit):"—"}</TableCell><TableCell><Badge color={row.movement>=0?"green":"amber"}>{minutes(row.movement)}</Badge></TableCell></TableRow>):<TableRow><TableCell colSpan={6}>Nenhum movimento encontrado no período.</TableCell></TableRow>}</TableBody></Table></div></section></>}
-  {tab==="rules"&&<><section className="surface time-bank-explainer"><ShieldCheck/><div><h2>Como o PontoNorte calcula</h2><p>Primeiro compara o tempo trabalhado com a meta da jornada. Depois identifica o tipo do dia e aplica a regra escolhida na ficha do funcionário. O resultado vai para pagamento, banco ou fica apenas informativo.</p></div></section><section className="time-bank-policy-grid">{policies.map(policy=><article className="surface overtime-policy-card" key={policy.id}><header><span><Clock3/></span><Badge color={policy.active?"green":"gray"}>{policy.active?"Ativa":"Inativa"}</Badge></header><h2>{policy.name}</h2><div><span><small>Dia útil</small><b>{policy.weekday_percent}%</b></span><span><small>Sábado</small><b>{policy.saturday_percent}%</b></span><span><small>Domingo</small><b>{policy.sunday_percent}%</b></span><span><small>Feriado</small><b>{policy.holiday_percent}%</b></span></div><p>Compensação em até {policy.compensation_months} meses · banco 50% ×{policy.bank_50_multiplier} · banco 100% ×{policy.bank_100_multiplier}</p>{canManage&&<Button variant="outline" onClick={()=>editPolicy(policy)}><Pencil/>Editar regra</Button>}</article>)}</section>{canManage&&<Button className="time-bank-add-policy" variant="outline" onClick={newPolicy}><Plus/>Criar outra regra</Button>}</>}
-  {tab==="calendar"&&<><section className="surface time-bank-calendar-head"><div><h2>Dias especiais</h2><p>Cadastre feriados, folgas trabalhadas ou datas que precisam ser classificadas diretamente como 50% ou 100%.</p></div>{canManage&&<Button onClick={()=>setCalendarOpen(true)}><Plus/>Adicionar data</Button>}</section><section className="surface table-surface responsive-table"><Table><TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead>Setor</TableHead><TableHead>Adicional</TableHead><TableHead>Cálculo</TableHead><TableHead>Ação</TableHead></TableRow></TableHeader><TableBody>{calendar.length?calendar.map(row=><TableRow key={row.id}><TableCell><b>{dateLabel(row.rule_date)}</b></TableCell><TableCell>{row.title}</TableCell><TableCell>{relationOne(row.departments)?.name||"Toda a empresa"}</TableCell><TableCell><Badge color={Number(row.overtime_percent)>=100?"amber":"blue"}>{row.overtime_percent}%</Badge></TableCell><TableCell>{row.count_all_worked_as_overtime?"Todo o período trabalhado":"Somente o que exceder a meta"}</TableCell><TableCell>{canManage&&<Button size="sm" variant="outline" onClick={()=>removeCalendar(row)}>Excluir</Button>}</TableCell></TableRow>):<TableRow><TableCell colSpan={6}>Nenhuma regra especial neste mês. O sistema usará as regras da política.</TableCell></TableRow>}</TableBody></Table></section></>}
-  <Dialog open={policyOpen} onOpenChange={setPolicyOpen}><DialogContent className="wide-dialog responsive-dialog"><DialogHeader><DialogTitle>{policyForm.id?"Editar regra":"Nova regra de horas extras"}</DialogTitle><DialogDescription>Os valores devem refletir a convenção, o acordo e a política da empresa.</DialogDescription></DialogHeader><form className="form-grid" onSubmit={savePolicy}><label>Nome da regra<Input required value={policyForm.name} onChange={e=>setPolicyForm({...policyForm,name:e.target.value})}/></label><label>Dia útil (%)<Input type="number" min={0} max={300} step={0.01} value={policyForm.weekday_percent} onChange={e=>setPolicyForm({...policyForm,weekday_percent:e.target.value})}/></label><label>Sábado (%)<Input type="number" min={0} max={300} step={0.01} value={policyForm.saturday_percent} onChange={e=>setPolicyForm({...policyForm,saturday_percent:e.target.value})}/></label><label>Domingo (%)<Input type="number" min={0} max={300} step={0.01} value={policyForm.sunday_percent} onChange={e=>setPolicyForm({...policyForm,sunday_percent:e.target.value})}/></label><label>Feriado (%)<Input type="number" min={0} max={300} step={0.01} value={policyForm.holiday_percent} onChange={e=>setPolicyForm({...policyForm,holiday_percent:e.target.value})}/></label><label>Multiplicador no banco — 50%<Input type="number" min={0} max={5} step={0.01} value={policyForm.bank_50_multiplier} onChange={e=>setPolicyForm({...policyForm,bank_50_multiplier:e.target.value})}/></label><label>Multiplicador no banco — 100%<Input type="number" min={0} max={5} step={0.01} value={policyForm.bank_100_multiplier} onChange={e=>setPolicyForm({...policyForm,bank_100_multiplier:e.target.value})}/></label><label>Prazo de compensação (meses)<Input type="number" min={1} max={24} value={policyForm.compensation_months} onChange={e=>setPolicyForm({...policyForm,compensation_months:e.target.value})}/></label><ErrorBox message={error}/><DialogFooter><Button type="button" variant="outline" onClick={()=>setPolicyOpen(false)}>Cancelar</Button><Button>Salvar regra</Button></DialogFooter></form></DialogContent></Dialog>
-  <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}><DialogContent className="wide-dialog responsive-dialog"><DialogHeader><DialogTitle>Adicionar dia especial</DialogTitle><DialogDescription>A regra desta data tem prioridade sobre sábado, domingo e feriado automático.</DialogDescription></DialogHeader><form className="form-grid" onSubmit={saveCalendar}><label>Data<Input required type="date" value={calendarForm.rule_date} onChange={e=>setCalendarForm({...calendarForm,rule_date:e.target.value})}/></label><label>Descrição<Input required placeholder="Ex.: Feriado municipal" value={calendarForm.title} onChange={e=>setCalendarForm({...calendarForm,title:e.target.value})}/></label><label>Adicional<select value={calendarForm.overtime_percent} onChange={e=>setCalendarForm({...calendarForm,overtime_percent:+e.target.value})}><option value={50}>Hora extra 50%</option><option value={100}>Hora extra 100%</option><option value={0}>Sem adicional</option></select></label><label>Aplicação<select value={calendarForm.applies_to_department_id} onChange={e=>setCalendarForm({...calendarForm,applies_to_department_id:e.target.value})}><option value="">Toda a empresa</option>{Array.from(new Map(employees.map(person=>[person.department_id,relationOne(person.departments)])).entries()).filter(([id])=>id).map(([id,department]:any)=><option key={id} value={id}>{department?.name}</option>)}</select></label><label className="full-row check-line"><input type="checkbox" checked={calendarForm.count_all_worked_as_overtime} onChange={e=>setCalendarForm({...calendarForm,count_all_worked_as_overtime:e.target.checked})}/>Contar todo o período trabalhado como hora extra</label><ErrorBox message={error}/><DialogFooter><Button type="button" variant="outline" onClick={()=>setCalendarOpen(false)}>Cancelar</Button><Button>Adicionar ao calendário</Button></DialogFooter></form></DialogContent></Dialog>
-  <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}><DialogContent className="wide-dialog responsive-dialog"><DialogHeader><DialogTitle>Lançamento no banco de horas</DialogTitle><DialogDescription>Todo ajuste fica registrado no extrato. Informe um motivo objetivo.</DialogDescription></DialogHeader><form className="form-grid" onSubmit={saveAdjustment}><label>Colaborador<select required value={adjustForm.employee_id} onChange={e=>setAdjustForm({...adjustForm,employee_id:e.target.value})}><option value="">Selecione</option>{employees.map(person=><option key={person.id} value={person.id}>{person.full_name} · {person.employee_code}</option>)}</select></label><label>Data<Input required type="date" value={adjustForm.work_date} onChange={e=>setAdjustForm({...adjustForm,work_date:e.target.value})}/></label><label>Tipo<select value={adjustForm.entry_type} onChange={e=>setAdjustForm({...adjustForm,entry_type:e.target.value})}><option value="credit">Crédito autorizado</option><option value="debit">Débito autorizado</option><option value="compensation">Folga / compensação</option><option value="payment">Horas pagas em folha</option><option value="opening">Saldo inicial</option></select></label><label>Quantidade de horas<Input required type="number" min={0.01} max={1000} step={0.01} value={adjustForm.hours} onChange={e=>setAdjustForm({...adjustForm,hours:+e.target.value})}/></label><label className="full-row">Motivo<Input required minLength={3} placeholder="Ex.: Compensação autorizada em 14/09" value={adjustForm.reason} onChange={e=>setAdjustForm({...adjustForm,reason:e.target.value})}/></label><ErrorBox message={error}/><DialogFooter><Button type="button" variant="outline" onClick={()=>setAdjustOpen(false)}>Cancelar</Button><Button>Salvar lançamento</Button></DialogFooter></form></DialogContent></Dialog></>
+      setStats({
+        employees: employees.count ?? 0,
+        entries: entries.count ?? 0,
+        pending: pending.count ?? 0,
+        departments: departments.count ?? 0,
+      });
+    })();
+  }, [ctx.organization.id]);
+  return (
+    <>
+      <PageHead
+        title="Hoje"
+        desc={new Intl.DateTimeFormat("pt-BR", { dateStyle: "full" }).format(
+          new Date(),
+        )}
+      />
+      <section className="metrics">
+        {[
+          ["" + stats.employees, "Funcionários ativos", "Equipe cadastrada"],
+          ["" + stats.entries, "Registros hoje", "Recebidos pelo aplicativo"],
+          ["" + stats.pending, "Pendências", "Aguardando análise"],
+          ["" + stats.departments, "Setores ativos", "Estrutura da empresa"],
+        ].map((m, i) => (
+          <article key={m[1]}>
+            <span className={"metric-mark m" + i} />
+            <div>
+              <b>{m[0]}</b>
+              <p>{m[1]}</p>
+              <small>{m[2]}</small>
+            </div>
+          </article>
+        ))}
+      </section>
+      <section className="permission-note">
+        <ShieldCheck />
+        <div>
+          <b>Operação em produção</b>
+          <p>
+            Os dados exibidos pertencem a {ctx.organization.trade_name}. Seu
+            acesso é limitado ao perfil {labels[ctx.member.role]}.
+          </p>
+        </div>
+      </section>
+    </>
+  );
 }
 
-function Schedules({ctx}:{ctx:Context}){
-  const [rows,setRows]=useState<any[]>([]);const [form,setForm]=useState({name:"",schedule_type:"flexible",weekly_hours:44,daily_hours:8,start_time:"08:00",break_start:"12:00",break_end:"13:00",end_time:"17:00",tolerance_minutes:10});
-  const load=useCallback(async()=>{const{data}=await supabase.from("work_schedules").select("*").eq("organization_id",ctx.organization.id).order("name");setRows(data??[])},[ctx.organization.id]);
-  useEffect(()=>{load()},[load]);
-  async function add(e:FormEvent){e.preventDefault();const fixed=form.schedule_type==="fixed";await supabase.from("work_schedules").insert({organization_id:ctx.organization.id,name:form.name,schedule_type:form.schedule_type,weekly_minutes:Math.round(form.weekly_hours*60),daily_minutes:Math.round(form.daily_hours*60),start_time:fixed?form.start_time:null,break_start:fixed?form.break_start:null,break_end:fixed?form.break_end:null,end_time:fixed?form.end_time:null,tolerance_minutes:form.tolerance_minutes});setForm({...form,name:""});load()}
-  return <><PageHead title="Jornadas" desc="Carga contratual fixa ou flexível, com saldo automático"/>{roleCanManage(ctx.member.role)&&<form className="surface schedule-form" onSubmit={add}><label>Nome<Input required placeholder="Ex.: Flexível 44h" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><label>Modelo<select value={form.schedule_type} onChange={e=>setForm({...form,schedule_type:e.target.value})}><option value="flexible">Flexível</option><option value="fixed">Horário fixo</option></select></label><label>Horas semanais<Input type="number" min={1} max={168} step={0.5} value={form.weekly_hours} onChange={e=>setForm({...form,weekly_hours:+e.target.value})}/></label><label>Meta diária<Input type="number" min={1} max={24} step={0.5} value={form.daily_hours} onChange={e=>setForm({...form,daily_hours:+e.target.value})}/></label>{form.schedule_type==="fixed"&&<><label>Entrada<Input type="time" value={form.start_time} onChange={e=>setForm({...form,start_time:e.target.value})}/></label><label>Intervalo início<Input type="time" value={form.break_start} onChange={e=>setForm({...form,break_start:e.target.value})}/></label><label>Intervalo fim<Input type="time" value={form.break_end} onChange={e=>setForm({...form,break_end:e.target.value})}/></label><label>Saída<Input type="time" value={form.end_time} onChange={e=>setForm({...form,end_time:e.target.value})}/></label></>}<label>Tolerância (min)<Input type="number" min={0} max={180} value={form.tolerance_minutes} onChange={e=>setForm({...form,tolerance_minutes:+e.target.value})}/></label><Button><Plus/>Adicionar jornada</Button></form>}<section className="surface table-surface"><Table><TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Modelo</TableHead><TableHead>Carga semanal</TableHead><TableHead>Meta diária</TableHead><TableHead>Horário</TableHead></TableRow></TableHeader><TableBody>{rows.map(r=><TableRow key={r.id}><TableCell><b>{r.name}</b></TableCell><TableCell><Badge color={r.schedule_type==="flexible"?"green":"blue"}>{r.schedule_type==="flexible"?"Flexível":"Fixo"}</Badge></TableCell><TableCell>{minutes(r.weekly_minutes)}</TableCell><TableCell>{minutes(r.daily_minutes)}</TableCell><TableCell>{r.schedule_type==="flexible"?"Entrada e saída livres":`${r.start_time?.slice(0,5)}–${r.end_time?.slice(0,5)}`}</TableCell></TableRow>)}</TableBody></Table></section></>
-}
-
-function ReviewEntries({ctx}:{ctx:Context}){
-  const [rows,setRows]=useState<any[]>([]);
-  const load=useCallback(async()=>{const{data}=await supabase.from("time_entries").select("*,employees(full_name,job_title,department_id),time_entry_reviews(*)").eq("organization_id",ctx.organization.id).gte("occurred_at",todayStart()).order("occurred_at",{ascending:false});setRows(data??[])},[ctx.organization.id]);
-  useEffect(()=>{load()},[load]);
-  async function review(row:any,status:string){
-    const {data:{user}}=await supabase.auth.getUser();if(!user)return;
-    await supabase.from("time_entry_reviews").upsert({organization_id:row.organization_id,time_entry_id:row.id,employee_id:row.employee_id,reviewer_user_id:user.id,status},{onConflict:"time_entry_id,reviewer_user_id"});load();
+function Employees({ ctx }: { ctx: Context }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [policies, setPolicies] = useState<any[]>([]);
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [recordEmployee, setRecordEmployee] = useState<any | null>(null);
+  const [qrEmployee, setQrEmployee] = useState<any | null>(null);
+  const [qrImage, setQrImage] = useState("");
+  const [issuedAccess, setIssuedAccess] = useState<any | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const blank = {
+    full_name: "",
+    username: "",
+    employee_code: "",
+    cpf: "",
+    birth_date: "",
+    gender: "",
+    hired_at: "",
+    job_title: "",
+    cbo_code: "",
+    cbo_title: "",
+    email: "",
+    phone: "",
+    department_id:
+      ctx.member.role === "manager" ? ctx.member.department_id || "" : "",
+    schedule_id: "",
+    overtime_mode: "bank",
+    overtime_policy_id: "",
+    role: "employee",
+    password: "",
+  };
+  const [form, setForm] = useState(blank);
+  const [editForm, setEditForm] = useState(blank);
+  const load = useCallback(async () => {
+    const org = ctx.organization.id;
+    const [e, d, s, p] = await Promise.all([
+      supabase
+        .from("employees")
+        .select(
+          "*,departments(name),work_schedules(name,start_time,end_time),overtime_policies(name)",
+        )
+        .eq("organization_id", org)
+        .order("full_name"),
+      supabase
+        .from("departments")
+        .select("*")
+        .eq("organization_id", org)
+        .eq("active", true)
+        .order("name"),
+      supabase
+        .from("work_schedules")
+        .select("*")
+        .eq("organization_id", org)
+        .eq("active", true)
+        .order("name"),
+      supabase
+        .from("overtime_policies")
+        .select("*")
+        .eq("organization_id", org)
+        .eq("active", true)
+        .order("name"),
+    ]);
+    setRows(e.data ?? []);
+    setDepartments(d.data ?? []);
+    setSchedules(s.data ?? []);
+    setPolicies(p.data ?? []);
+  }, [ctx.organization.id]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  async function create(e: FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    const { data, error } = await supabase.functions.invoke("manage-user", {
+      body: {
+        ...form,
+        organization_id: ctx.organization.id,
+        department_id: form.department_id || null,
+        schedule_id: form.schedule_id || null,
+        overtime_policy_id: form.overtime_policy_id || policies[0]?.id || null,
+      },
+    });
+    setLoading(false);
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível cadastrar o funcionário.",
+        ),
+      );
+    setIssuedAccess(data);
+    setOpen(false);
+    setForm(blank);
+    load();
   }
-  return <><PageHead title="Conferência de pontos" desc="Líderes confirmam os registros do próprio setor sem alterar a marcação original"/><section className="surface table-surface"><Table><TableHeader><TableRow><TableHead>Funcionário</TableHead><TableHead>Registro</TableHead><TableHead>Método</TableHead><TableHead>Conferência</TableHead><TableHead>Ações</TableHead></TableRow></TableHeader><TableBody>{rows.map(r=>{const own=r.time_entry_reviews?.find((x:any)=>x.reviewer_user_id===ctx.member.user_id);return <TableRow key={r.id}><TableCell>{r.employees?.full_name}</TableCell><TableCell>{eventLabels[r.event_type]} · {dateTime(r.occurred_at)}</TableCell><TableCell>{methodLabels[r.method]??r.method}</TableCell><TableCell><Badge color={own?.status==="confirmed"?"green":own?"amber":"gray"}>{own?.status==="confirmed"?"Confirmado":own?"Divergência":"Pendente"}</Badge></TableCell><TableCell><div className="row-actions"><Button size="sm" variant="outline" onClick={()=>review(r,"confirmed")}><Check/>Confirmar</Button><Button size="sm" variant="outline" onClick={()=>review(r,"forwarded_to_hr")}><CircleAlert/>Enviar ao RH</Button></div></TableCell></TableRow>})}</TableBody></Table></section></>
+  function beginEdit(row: any) {
+    setError("");
+    setEditForm({
+      ...blank,
+      ...row,
+      cbo_code: formatCbo(row.cbo_code),
+      department_id: row.department_id ?? "",
+      schedule_id: row.schedule_id ?? "",
+      password: "",
+    });
+    setEditing(row);
+  }
+  async function saveEdit(e: FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    setLoading(true);
+    setError("");
+    const { error } = await supabase.functions.invoke("manage-user", {
+      body: {
+        ...editForm,
+        action: "update",
+        organization_id: ctx.organization.id,
+        employee_id: editing.id,
+        cbo_code: normalizeCbo(editForm.cbo_code),
+        department_id: editForm.department_id || null,
+        schedule_id: editForm.schedule_id || null,
+        overtime_policy_id:
+          editForm.overtime_policy_id || policies[0]?.id || null,
+      },
+    });
+    setLoading(false);
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível atualizar o funcionário.",
+        ),
+      );
+    setEditing(null);
+    load();
+  }
+  async function showQr(row: any) {
+    setQrEmployee(row);
+    setQrImage(
+      await QRCode.toDataURL(employeeQrPayload(ctx.organization.id, row), {
+        width: 420,
+        margin: 2,
+        color: { dark: "#0b2e4c", light: "#ffffff" },
+      }),
+    );
+  }
+  async function rotateQr() {
+    if (
+      !qrEmployee ||
+      !window.confirm(
+        `Renovar o QR Code de ${qrEmployee.full_name}? O código anterior deixará de funcionar.`,
+      )
+    )
+      return;
+    setLoading(true);
+    const { data, error } = await supabase.functions.invoke("manage-user", {
+      body: {
+        action: "rotate_qr",
+        organization_id: ctx.organization.id,
+        employee_id: qrEmployee.id,
+      },
+    });
+    setLoading(false);
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível renovar o QR Code.",
+        ),
+      );
+    const updated = {
+      ...qrEmployee,
+      personal_qr_token: data.personal_qr_token,
+    };
+    setQrEmployee(updated);
+    setQrImage(
+      await QRCode.toDataURL(employeeQrPayload(ctx.organization.id, updated), {
+        width: 420,
+        margin: 2,
+        color: { dark: "#0b2e4c", light: "#ffffff" },
+      }),
+    );
+    load();
+  }
+  function showAccess(row: any) {
+    setError("");
+    setIssuedAccess({
+      employee_id: row.id,
+      full_name: row.full_name,
+      company_code: ctx.organization.company_code,
+      username: row.username,
+      temporary_password: null,
+    });
+  }
+  async function resetAccess() {
+    if (
+      !issuedAccess?.employee_id ||
+      !window.confirm(
+        `Gerar uma nova senha provisória para ${issuedAccess.full_name}? A senha anterior deixará de funcionar.`,
+      )
+    )
+      return;
+    setLoading(true);
+    setError("");
+    const { data, error } = await supabase.functions.invoke("manage-user", {
+      body: {
+        action: "reset_access",
+        organization_id: ctx.organization.id,
+        employee_id: issuedAccess.employee_id,
+      },
+    });
+    setLoading(false);
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível gerar o novo acesso.",
+        ),
+      );
+    setIssuedAccess(data);
+  }
+  async function copyAccess() {
+    if (!issuedAccess?.temporary_password) return;
+    const text = `PontoNorte\nEmpresa: ${issuedAccess.company_code}\nUsuário: ${issuedAccess.username}\nSenha provisória: ${issuedAccess.temporary_password}\nAcesse: https://delta-1.github.io/PontoNorte/`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    }
+    setError("");
+  }
+  function downloadQr() {
+    if (!qrImage || !qrEmployee) return;
+    const link = document.createElement("a");
+    link.href = qrImage;
+    link.download = `QR-${qrEmployee.employee_code}-${qrEmployee.full_name.replace(/[^a-zA-Z0-9]+/g, "-")}.png`;
+    link.click();
+  }
+  async function setStatus(
+    row: any,
+    status: "active" | "inactive" | "terminated",
+  ) {
+    const reason =
+      status === "terminated"
+        ? window.prompt("Motivo do desligamento:") || ""
+        : null;
+    if (status === "terminated" && !reason) return;
+    const { error } = await supabase.functions.invoke("manage-user", {
+      body: {
+        action: "set_status",
+        organization_id: ctx.organization.id,
+        employee_id: row.id,
+        status,
+        termination_reason: reason,
+      },
+    });
+    if (error)
+      setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível alterar a situação.",
+        ),
+      );
+    else load();
+  }
+  async function remove(row: any) {
+    if (
+      !window.confirm(
+        `Excluir definitivamente o perfil de ${row.full_name}? Os registros relacionados também serão removidos.`,
+      )
+    )
+      return;
+    const { error } = await supabase.functions.invoke("manage-user", {
+      body: {
+        action: "delete",
+        organization_id: ctx.organization.id,
+        employee_id: row.id,
+      },
+    });
+    if (error)
+      setError(await functionErrorMessage(error, "Não foi possível excluir."));
+    else load();
+  }
+  const filtered = rows.filter((r) =>
+    (
+      r.full_name +
+      r.username +
+      (r.job_title ?? "") +
+      (r.cbo_code ?? "") +
+      (r.cbo_title ?? "") +
+      (r.departments?.name ?? "")
+    )
+      .toLowerCase()
+      .includes(q.toLowerCase()),
+  );
+  const canCreate =
+    roleCanManage(ctx.member.role) || ctx.member.role === "manager";
+  return (
+    <>
+      <PageHead
+        title="Funcionários"
+        desc="Ficha cadastral, CBO, jornada, horas extras, acesso e QR individual"
+        action={
+          canCreate ? (
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <UserPlus />
+                  Adicionar funcionário
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="employee-dialog">
+                <DialogHeader className="employee-dialog-head">
+                  <span className="employee-dialog-icon">
+                    <UserPlus />
+                  </span>
+                  <div>
+                    <DialogTitle>Novo funcionário</DialogTitle>
+                    <DialogDescription>
+                      Crie o vínculo e o acesso. No primeiro login, o
+                      funcionário completa contato e endereço.
+                    </DialogDescription>
+                  </div>
+                </DialogHeader>
+                <form className="employee-dialog-form" onSubmit={create}>
+                  <div className="employee-dialog-scroll">
+                    <section className="employee-form-section">
+                      <header>
+                        <span>1</span>
+                        <div>
+                          <b>Identificação</b>
+                          <small>
+                            Dados básicos para localizar o colaborador.
+                          </small>
+                        </div>
+                      </header>
+                      <div className="form-grid employee-form">
+                        <label>
+                          Nome completo
+                          <Input
+                            autoComplete="name"
+                            required
+                            value={form.full_name}
+                            onChange={(e) =>
+                              setForm({ ...form, full_name: e.target.value })
+                            }
+                          />
+                        </label>
+                        <label>
+                          CPF (opcional neste momento)
+                          <Input
+                            inputMode="numeric"
+                            maxLength={14}
+                            placeholder="Pode ser informado depois pelo RH"
+                            value={form.cpf}
+                            onChange={(e) =>
+                              setForm({ ...form, cpf: e.target.value })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Matrícula
+                          <Input
+                            required
+                            value={form.employee_code}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                employee_code: e.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Usuário
+                          <Input
+                            required
+                            autoCapitalize="none"
+                            autoComplete="username"
+                            value={form.username}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                username: e.target.value.toLowerCase(),
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Data de nascimento
+                          <Input
+                            type="date"
+                            value={form.birth_date}
+                            onChange={(e) =>
+                              setForm({ ...form, birth_date: e.target.value })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Data de admissão
+                          <Input
+                            type="date"
+                            value={form.hired_at}
+                            onChange={(e) =>
+                              setForm({ ...form, hired_at: e.target.value })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Gênero
+                          <select
+                            value={form.gender}
+                            onChange={(e) =>
+                              setForm({ ...form, gender: e.target.value })
+                            }
+                          >
+                            <option value="">Não informado</option>
+                            <option value="female">Feminino</option>
+                            <option value="male">Masculino</option>
+                            <option value="other">Outro</option>
+                            <option value="not_disclosed">
+                              Prefere não informar
+                            </option>
+                          </select>
+                        </label>
+                      </div>
+                    </section>
+                    <section className="employee-form-section">
+                      <header>
+                        <span>2</span>
+                        <div>
+                          <b>Trabalho</b>
+                          <small>
+                            Cargo, ocupação, setor e jornada contratual.
+                          </small>
+                        </div>
+                      </header>
+                      <div className="form-grid employee-form">
+                        <label>
+                          Cargo na empresa
+                          <Input
+                            value={form.job_title}
+                            onChange={(e) =>
+                              setForm({ ...form, job_title: e.target.value })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Código CBO
+                          <Input
+                            list="cbo-create-options"
+                            inputMode="numeric"
+                            placeholder="Ex.: 4110-10"
+                            value={form.cbo_code}
+                            onChange={(e) => {
+                              const code = formatCbo(e.target.value);
+                              setForm({
+                                ...form,
+                                cbo_code: code,
+                                cbo_title: cboTitleFor(code) || form.cbo_title,
+                              });
+                            }}
+                          />
+                        </label>
+                        <label className="full-row">
+                          Ocupação CBO
+                          <Input
+                            placeholder="Ex.: Assistente administrativo"
+                            value={form.cbo_title}
+                            onChange={(e) =>
+                              setForm({ ...form, cbo_title: e.target.value })
+                            }
+                          />
+                          <datalist id="cbo-create-options">
+                            {commonCboOptions.map((item) => (
+                              <option
+                                key={item.code}
+                                value={formatCbo(item.code)}
+                              >
+                                {item.title}
+                              </option>
+                            ))}
+                          </datalist>
+                        </label>
+                        <label>
+                          Setor
+                          <select
+                            disabled={ctx.member.role === "manager"}
+                            value={form.department_id}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                department_id: e.target.value,
+                              })
+                            }
+                          >
+                            <option value="">Sem setor</option>
+                            {departments.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Jornada
+                          <select
+                            value={form.schedule_id}
+                            onChange={(e) =>
+                              setForm({ ...form, schedule_id: e.target.value })
+                            }
+                          >
+                            <option value="">Sem jornada</option>
+                            {schedules.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Perfil
+                          <select
+                            disabled={ctx.member.role === "manager"}
+                            value={form.role}
+                            onChange={(e) =>
+                              setForm({ ...form, role: e.target.value })
+                            }
+                          >
+                            <option value="employee">Funcionário</option>
+                            <option value="manager">Líder de setor</option>
+                            <option value="hr_agent">Equipe de RH</option>
+                            <option value="hr_admin">
+                              Administrador de RH
+                            </option>
+                          </select>
+                        </label>
+                      </div>
+                    </section>
+                    <section className="employee-form-section overtime-employee-section">
+                      <header>
+                        <span>3</span>
+                        <div>
+                          <b>Horas extras e banco</b>
+                          <small>
+                            Escolha como os saldos deste colaborador serão
+                            tratados.
+                          </small>
+                        </div>
+                      </header>
+                      <div className="form-grid employee-form">
+                        <label>
+                          Destino das horas extras
+                          <select
+                            value={form.overtime_mode}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                overtime_mode: e.target.value,
+                              })
+                            }
+                          >
+                            <option value="bank">
+                              Levar para o banco de horas
+                            </option>
+                            <option value="pay">Pagar como hora extra</option>
+                            <option value="disabled">
+                              Não controlar automaticamente
+                            </option>
+                          </select>
+                        </label>
+                        <label>
+                          Regra de adicionais
+                          <select
+                            disabled={form.overtime_mode === "disabled"}
+                            value={
+                              form.overtime_policy_id || policies[0]?.id || ""
+                            }
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                overtime_policy_id: e.target.value,
+                              })
+                            }
+                          >
+                            {policies.map((policy) => (
+                              <option key={policy.id} value={policy.id}>
+                                {policy.name} · {policy.weekday_percent}% /{" "}
+                                {policy.holiday_percent}%
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="full-row overtime-form-note">
+                          <Clock3 />
+                          <span>
+                            <b>Cálculo transparente</b>
+                            <small>
+                              O PontoNorte separa automaticamente horas normais,
+                              extra 50%, extra 100%, créditos e débitos. O RH
+                              pode ajustar datas especiais no Banco de horas.
+                            </small>
+                          </span>
+                        </div>
+                      </div>
+                    </section>
+                    <section className="employee-form-section">
+                      <header>
+                        <span>4</span>
+                        <div>
+                          <b>Acesso e contato</b>
+                          <small>
+                            Credenciais provisórias e formas de contato.
+                          </small>
+                        </div>
+                      </header>
+                      <div className="form-grid employee-form">
+                        <label className="full-row">
+                          Senha provisória (opcional)
+                          <PasswordInput
+                            minLength={8}
+                            autoComplete="new-password"
+                            placeholder="Deixe em branco para gerar automaticamente"
+                            value={form.password}
+                            onChange={(e) =>
+                              setForm({ ...form, password: e.target.value })
+                            }
+                          />
+                          <small>
+                            O sistema mostra a senha uma vez para o RH entregar
+                            ao funcionário.
+                          </small>
+                        </label>
+                      </div>
+                    </section>
+                  </div>
+                  <ErrorBox message={error} />
+                  <DialogFooter className="employee-dialog-actions">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setOpen(false)}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button disabled={loading}>
+                      {loading ? "Criando…" : "Criar acesso e QR"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          ) : undefined
+        }
+      />
+      {issuedAccess && (
+        <section className="issued-access">
+          <ShieldCheck />
+          <div>
+            <b>Acesso de {issuedAccess.full_name}</b>
+            <p>
+              Empresa: <strong>{issuedAccess.company_code}</strong> · Usuário:{" "}
+              <strong>{issuedAccess.username}</strong>
+              {issuedAccess.temporary_password && (
+                <> · Senha provisória: <strong>{issuedAccess.temporary_password}</strong></>
+              )}
+            </p>
+            <small>{issuedAccess.temporary_password
+              ? "Copie e entregue estes três dados. No primeiro acesso o funcionário troca a senha."
+              : "Por segurança, a senha atual não pode ser consultada. Gere uma nova somente se o funcionário perdeu o acesso."}</small>
+            <div className="issued-access-actions">
+              {issuedAccess.temporary_password && <Button size="sm" variant="outline" onClick={copyAccess}><Copy />Copiar dados</Button>}
+              <Button size="sm" variant="outline" disabled={loading} onClick={resetAccess}><KeyRound />{loading ? "Gerando…" : "Gerar nova senha"}</Button>
+            </div>
+          </div>
+          <button onClick={() => setIssuedAccess(null)} aria-label="Fechar">
+            <X />
+          </button>
+        </section>
+      )}
+      <ErrorBox message={error} />
+      <section className="surface table-surface">
+        <div className="table-tools">
+          <label>
+            <Search />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar funcionário, cargo ou CBO"
+            />
+          </label>
+          <Button variant="outline" onClick={load}>
+            <RefreshCw />
+            Atualizar
+          </Button>
+        </div>
+        <div className="responsive-table">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Funcionário</TableHead>
+                <TableHead>Matrícula / CPF</TableHead>
+                <TableHead>Cargo / CBO</TableHead>
+                <TableHead>Setor</TableHead>
+                <TableHead>Jornada</TableHead>
+                <TableHead>Horas extras</TableHead>
+                <TableHead>Situação</TableHead>
+                <TableHead>Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell>
+                    <div className="person-cell">
+                      <span className="avatar">{initials(r.full_name)}</span>
+                      <p>
+                        <b>{r.full_name}</b>
+                        <small>{r.username}</small>
+                      </p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {r.employee_code}
+                    <br />
+                    <small>{r.cpf || "CPF não informado"}</small>
+                  </TableCell>
+                  <TableCell>
+                    <b>{r.job_title || "Sem cargo"}</b>
+                    <br />
+                    <small>
+                      {r.cbo_code
+                        ? `${formatCbo(r.cbo_code)} · ${r.cbo_title || "Ocupação não informada"}`
+                        : "CBO não informado"}
+                    </small>
+                  </TableCell>
+                  <TableCell>{r.departments?.name || "—"}</TableCell>
+                  <TableCell>{r.work_schedules?.name || "—"}</TableCell>
+                  <TableCell>
+                    <Badge
+                      color={
+                        r.overtime_mode === "bank"
+                          ? "blue"
+                          : r.overtime_mode === "pay"
+                            ? "green"
+                            : "gray"
+                      }
+                    >
+                      {overtimeModeLabels[r.overtime_mode] ?? "Banco de horas"}
+                    </Badge>
+                    <small className="overtime-policy-name">
+                      {r.overtime_policies?.name || "Regra padrão"}
+                    </small>
+                  </TableCell>
+                  <TableCell>
+                    <Badge color={r.status === "active" ? "green" : "gray"}>
+                      {r.status === "active"
+                        ? "Ativo"
+                        : r.status === "terminated"
+                          ? "Demitido"
+                          : r.status}
+                    </Badge>
+                    {r.termination_reason && (
+                      <small className="termination-note">
+                        {r.termination_reason}
+                      </small>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="row-actions">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setRecordEmployee(r)}
+                      >
+                        <FileText />
+                        Ficha completa
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => beginEdit(r)}
+                      >
+                        <Pencil />
+                        Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => showAccess(r)}
+                      >
+                        <KeyRound />
+                        Acesso
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => showQr(r)}
+                      >
+                        <QrCode />
+                        QR individual
+                      </Button>
+                      {r.status === "active" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setStatus(r, "terminated")}
+                        >
+                          Desligar
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setStatus(r, "active")}
+                        >
+                          Reativar
+                        </Button>
+                      )}
+                      {["platform_admin", "company_owner", "hr_admin"].includes(
+                        ctx.member.role,
+                      ) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => remove(r)}
+                        >
+                          Excluir
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </section>
+      <Dialog
+        open={!!editing}
+        onOpenChange={(value) => {
+          if (!value) setEditing(null);
+        }}
+      >
+        <DialogContent className="wide-dialog responsive-dialog">
+          <DialogHeader>
+            <DialogTitle>Editar funcionário</DialogTitle>
+            <DialogDescription>
+              Atualize a ficha, o cargo, o CBO, o setor ou a jornada sem recriar
+              o acesso.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="form-grid employee-form" onSubmit={saveEdit}>
+            <label>
+              Nome completo
+              <Input
+                required
+                value={editForm.full_name}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, full_name: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              CPF
+              <Input
+                inputMode="numeric"
+                maxLength={14}
+                value={editForm.cpf ?? ""}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, cpf: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Matrícula
+              <Input
+                required
+                value={editForm.employee_code}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, employee_code: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Cargo na empresa
+              <Input
+                value={editForm.job_title ?? ""}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, job_title: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Código CBO
+              <Input
+                list="cbo-edit-options"
+                inputMode="numeric"
+                placeholder="Ex.: 4110-10"
+                value={editForm.cbo_code}
+                onChange={(e) => {
+                  const code = formatCbo(e.target.value);
+                  setEditForm({
+                    ...editForm,
+                    cbo_code: code,
+                    cbo_title: cboTitleFor(code) || editForm.cbo_title,
+                  });
+                }}
+              />
+            </label>
+            <label>
+              Ocupação CBO
+              <Input
+                value={editForm.cbo_title ?? ""}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, cbo_title: e.target.value })
+                }
+              />
+              <datalist id="cbo-edit-options">
+                {commonCboOptions.map((item) => (
+                  <option key={item.code} value={formatCbo(item.code)}>
+                    {item.title}
+                  </option>
+                ))}
+              </datalist>
+            </label>
+            <label>
+              Data de nascimento
+              <Input
+                type="date"
+                value={editForm.birth_date ?? ""}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, birth_date: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Admissão
+              <Input
+                type="date"
+                value={editForm.hired_at ?? ""}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, hired_at: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Gênero
+              <select
+                value={editForm.gender ?? ""}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, gender: e.target.value })
+                }
+              >
+                <option value="">Não informado</option>
+                <option value="female">Feminino</option>
+                <option value="male">Masculino</option>
+                <option value="other">Outro</option>
+                <option value="not_disclosed">Prefere não informar</option>
+              </select>
+            </label>
+            <label>
+              E-mail pessoal
+              <Input
+                type="email"
+                value={editForm.email ?? ""}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, email: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Telefone
+              <Input
+                value={editForm.phone ?? ""}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, phone: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Setor
+              <select
+                disabled={ctx.member.role === "manager"}
+                value={editForm.department_id}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, department_id: e.target.value })
+                }
+              >
+                <option value="">Sem setor</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Jornada
+              <select
+                value={editForm.schedule_id}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, schedule_id: e.target.value })
+                }
+              >
+                <option value="">Sem jornada</option>
+                {schedules.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Destino das horas extras
+              <select
+                value={editForm.overtime_mode ?? "bank"}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, overtime_mode: e.target.value })
+                }
+              >
+                <option value="bank">Banco de horas</option>
+                <option value="pay">Pagamento em folha</option>
+                <option value="disabled">Não controlar</option>
+              </select>
+            </label>
+            <label>
+              Regra de adicionais
+              <select
+                disabled={editForm.overtime_mode === "disabled"}
+                value={editForm.overtime_policy_id || policies[0]?.id || ""}
+                onChange={(e) =>
+                  setEditForm({
+                    ...editForm,
+                    overtime_policy_id: e.target.value,
+                  })
+                }
+              >
+                {policies.map((policy) => (
+                  <option key={policy.id} value={policy.id}>
+                    {policy.name} · {policy.weekday_percent}% /{" "}
+                    {policy.holiday_percent}%
+                  </option>
+                ))}
+              </select>
+            </label>
+            <ErrorBox message={error} />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditing(null)}
+              >
+                Cancelar
+              </Button>
+              <Button disabled={loading}>
+                {loading ? "Salvando…" : "Salvar alterações"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!qrEmployee}
+        onOpenChange={(value) => {
+          if (!value) {
+            setQrEmployee(null);
+            setQrImage("");
+          }
+        }}
+      >
+        <DialogContent className="employee-qr-dialog">
+          <DialogHeader>
+            <DialogTitle>QR Code individual</DialogTitle>
+            <DialogDescription>
+              Este código pertence somente a {qrEmployee?.full_name}. O
+              aplicativo confirma o usuário conectado antes de registrar o
+              ponto.
+            </DialogDescription>
+          </DialogHeader>
+          {qrImage && (
+            <figure className="employee-qr-card">
+              <img
+                src={qrImage}
+                alt={`QR Code individual de ${qrEmployee?.full_name}`}
+              />
+              <figcaption>
+                <b>{qrEmployee?.full_name}</b>
+                <span>Matrícula {qrEmployee?.employee_code}</span>
+                <small>
+                  {qrEmployee?.job_title || "Funcionário"}
+                  {qrEmployee?.cbo_code
+                    ? ` · CBO ${formatCbo(qrEmployee.cbo_code)}`
+                    : ""}
+                </small>
+              </figcaption>
+            </figure>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={rotateQr}
+              disabled={loading}
+            >
+              <RefreshCw />
+              Renovar código
+            </Button>
+            <Button type="button" onClick={downloadQr}>
+              <Download />
+              Baixar QR
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <EmployeeRecordDialog
+        open={!!recordEmployee}
+        onOpenChange={(value) => {
+          if (!value) setRecordEmployee(null);
+        }}
+        organization={ctx.organization}
+        employee={recordEmployee}
+        schedule={recordEmployee?.work_schedules}
+        canManage={canCreate}
+      />
+    </>
+  );
 }
 
-function RollCall({ctx}:{ctx:Context}){
-  const [employees,setEmployees]=useState<any[]>([]);const [marks,setMarks]=useState<Record<string,string>>({});const [note,setNote]=useState("");const [saved,setSaved]=useState(false);
-  const departmentId=ctx.member.department_id;
-  useEffect(()=>{if(!departmentId)return;supabase.from("employees").select("*").eq("organization_id",ctx.organization.id).eq("department_id",departmentId).eq("status","active").order("full_name").then(({data})=>setEmployees(data??[]))},[ctx.organization.id,departmentId]);
-  async function finish(){
-    if(!departmentId)return;
-    const {data:{user}}=await supabase.auth.getUser();if(!user)return;
-    const date=new Date().toISOString().slice(0,10);
-    const {data:call,error}=await supabase.from("attendance_calls").upsert({organization_id:ctx.organization.id,department_id:departmentId,call_date:date,period:"daily",status:"completed",notes:note,created_by:user.id,completed_at:new Date().toISOString()},{onConflict:"department_id,call_date,period"}).select("id").single();
-    if(error||!call)return;
-    await supabase.from("attendance_call_items").upsert(employees.map(e=>({call_id:call.id,organization_id:ctx.organization.id,employee_id:e.id,mark:marks[e.id]||"absent",marked_at:new Date().toISOString()})),{onConflict:"call_id,employee_id"});
+function Departments({ ctx }: { ctx: Context }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [name, setName] = useState("");
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from("departments")
+      .select("*,employees(count)")
+      .eq("organization_id", ctx.organization.id)
+      .order("name");
+    setRows(data ?? []);
+  }, [ctx.organization.id]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    await supabase
+      .from("departments")
+      .insert({ organization_id: ctx.organization.id, name });
+    setName("");
+    load();
+  }
+  return (
+    <>
+      <PageHead
+        title="Setores e líderes"
+        desc="O líder acessa e confirma somente os pontos do próprio setor"
+        action={
+          roleCanManage(ctx.member.role) ? (
+            <form className="inline-create" onSubmit={add}>
+              <Input
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Nome do novo setor"
+              />
+              <Button>
+                <Plus />
+                Criar
+              </Button>
+            </form>
+          ) : undefined
+        }
+      />
+      <section className="sector-cards">
+        {rows.map((r) => (
+          <article className="surface" key={r.id}>
+            <header>
+              <span className="sector-icon">
+                <UsersRound />
+              </span>
+              <Badge color={r.active ? "green" : "gray"}>
+                {r.active ? "Ativo" : "Inativo"}
+              </Badge>
+            </header>
+            <h2>{r.name}</h2>
+            <p className="muted-text">
+              {r.description || "Equipe organizada por setor."}
+            </p>
+            <dl>
+              <div>
+                <dt>Funcionários</dt>
+                <dd>{r.employees?.[0]?.count ?? 0}</dd>
+              </div>
+            </dl>
+          </article>
+        ))}
+      </section>
+    </>
+  );
+}
+
+function Devices({ ctx }: { ctx: Context }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from("authorized_devices")
+      .select("*,employees(full_name,department_id)")
+      .eq("organization_id", ctx.organization.id)
+      .order("created_at", { ascending: false });
+    setRows(data ?? []);
+  }, [ctx.organization.id]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  async function setApproval(row: any, approved: boolean) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    await supabase
+      .from("authorized_devices")
+      .update({
+        approved,
+        approved_by: approved ? user?.id : null,
+        approved_at: approved ? new Date().toISOString() : null,
+        revoked_at: approved ? null : new Date().toISOString(),
+      })
+      .eq("id", row.id);
+    load();
+  }
+  return (
+    <>
+      <PageHead
+        title="Dispositivos"
+        desc="Autorize os celulares vinculados aos funcionários"
+      />
+      <section className="surface table-surface">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Funcionário</TableHead>
+              <TableHead>Aparelho</TableHead>
+              <TableHead>Plataforma</TableHead>
+              <TableHead>Último acesso</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell>{r.employees?.full_name}</TableCell>
+                <TableCell>
+                  <b>{r.device_name || "Celular"}</b>
+                  <br />
+                  <small>{r.device_uuid}</small>
+                </TableCell>
+                <TableCell>{r.platform || "android"}</TableCell>
+                <TableCell>
+                  {r.last_seen_at
+                    ? dateTime(r.last_seen_at)
+                    : "Primeiro acesso"}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    color={r.approved && !r.revoked_at ? "green" : "amber"}
+                  >
+                    {r.approved && !r.revoked_at ? "Autorizado" : "Pendente"}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setApproval(r, !(r.approved && !r.revoked_at))
+                    }
+                  >
+                    {r.approved && !r.revoked_at ? "Revogar" : "Autorizar"}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </section>
+    </>
+  );
+}
+
+function Terminals({ ctx }: { ctx: Context }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState("");
+  const [form, setForm] = useState({
+    name: "Recepção",
+    code: "recepcao",
+    password: "",
+    location_name: "",
+    radius_meters: 150,
+  });
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from("terminals")
+      .select("*")
+      .eq("organization_id", ctx.organization.id)
+      .order("created_at", { ascending: false });
+    setRows(data ?? []);
+  }, [ctx.organization.id]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  async function create(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    const { data, error } = await supabase.functions.invoke(
+      "provision-terminal",
+      { body: { ...form, organization_id: ctx.organization.id } },
+    );
+    if (error)
+      return setError(
+        await functionErrorMessage(error, "Não foi possível criar o terminal."),
+      );
+    setSaved(`${data.company_code} / ${data.terminal.code}`);
+    setOpen(false);
+    setForm({ ...form, password: "" });
+    load();
+  }
+  async function toggle(r: any) {
+    await supabase
+      .from("terminals")
+      .update({ enabled: !r.enabled })
+      .eq("id", r.id);
+    load();
+  }
+  return (
+    <>
+      <PageHead
+        title="Terminais da empresa"
+        desc="APK fixo para recepção, portaria ou tablet compartilhado"
+        action={
+          ["platform_admin", "company_owner", "hr_admin"].includes(
+            ctx.member.role,
+          ) ? (
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus />
+                  Novo terminal
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Criar terminal corporativo</DialogTitle>
+                  <DialogDescription>
+                    Instale o mesmo APK no aparelho da empresa e entre com estas
+                    credenciais.
+                  </DialogDescription>
+                </DialogHeader>
+                <form className="form-grid" onSubmit={create}>
+                  <label>
+                    Nome do aparelho
+                    <Input
+                      required
+                      value={form.name}
+                      onChange={(e) =>
+                        setForm({ ...form, name: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Código do terminal
+                    <Input
+                      required
+                      minLength={3}
+                      value={form.code}
+                      onChange={(e) =>
+                        setForm({ ...form, code: e.target.value.toLowerCase() })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Local
+                    <Input
+                      value={form.location_name}
+                      onChange={(e) =>
+                        setForm({ ...form, location_name: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Raio permitido (metros)
+                    <Input
+                      type="number"
+                      min={20}
+                      max={5000}
+                      value={form.radius_meters}
+                      onChange={(e) =>
+                        setForm({ ...form, radius_meters: +e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="full-row">
+                    Senha do terminal
+                    <PasswordInput
+                      required
+                      minLength={10}
+                      value={form.password}
+                      onChange={(e) =>
+                        setForm({ ...form, password: e.target.value })
+                      }
+                    />
+                  </label>
+                  <ErrorBox message={error} />
+                  <DialogFooter>
+                    <Button>Criar terminal</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          ) : undefined
+        }
+      />
+      {saved && (
+        <div className="success-banner">
+          <Check />
+          Terminal criado. Login no APK: <b>{saved}</b>
+        </div>
+      )}
+      <section className="surface table-surface">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Terminal</TableHead>
+              <TableHead>Código</TableHead>
+              <TableHead>Local</TableHead>
+              <TableHead>Aparelho vinculado</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Ação</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell>
+                  <b>{r.name}</b>
+                </TableCell>
+                <TableCell>{r.code}</TableCell>
+                <TableCell>{r.location_name || "Sem restrição"}</TableCell>
+                <TableCell>
+                  {r.device_uuid || "Vincula no primeiro acesso"}
+                </TableCell>
+                <TableCell>
+                  <Badge color={r.enabled ? "green" : "gray"}>
+                    {r.enabled ? "Ativo" : "Desativado"}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Button size="sm" variant="outline" onClick={() => toggle(r)}>
+                    {r.enabled ? "Desativar" : "Ativar"}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </section>
+    </>
+  );
+}
+
+type TimeBankTab = "balances" | "rules" | "calendar";
+function TimeBank({ ctx }: { ctx: Context }) {
+  const timezone = ctx.organization.timezone || "America/Sao_Paulo";
+  const today = dateKeyInZone(new Date(), timezone);
+  const [month, setMonth] = useState(today.slice(0, 7));
+  const [employeeId, setEmployeeId] = useState("all");
+  const [tab, setTab] = useState<TimeBankTab>("balances");
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [daily, setDaily] = useState<any[]>([]);
+  const [balances, setBalances] = useState<any[]>([]);
+  const [policies, setPolicies] = useState<any[]>([]);
+  const [calendar, setCalendar] = useState<any[]>([]);
+  const [adjustments, setAdjustments] = useState<any[]>([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [policyOpen, setPolicyOpen] = useState(false);
+  const [policyForm, setPolicyForm] = useState<any>({
+    id: "",
+    name: "Padrão 50% / 100%",
+    weekday_percent: 50,
+    saturday_percent: 50,
+    sunday_percent: 100,
+    holiday_percent: 100,
+    bank_50_multiplier: 1,
+    bank_100_multiplier: 1,
+    compensation_months: 6,
+    active: true,
+  });
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarForm, setCalendarForm] = useState({
+    rule_date: today,
+    title: "",
+    overtime_percent: 100,
+    count_all_worked_as_overtime: true,
+    applies_to_department_id: "",
+  });
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustForm, setAdjustForm] = useState({
+    employee_id: "",
+    work_date: today,
+    entry_type: "credit",
+    hours: 1,
+    reason: "",
+  });
+  const canManage = roleCanManage(ctx.member.role);
+  const monthEnd = useMemo(() => {
+    const [y, m] = month.split("-").map(Number);
+    return `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
+  }, [month]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      let employeeQuery = supabase
+        .from("employees")
+        .select(
+          "id,full_name,employee_code,department_id,overtime_mode,overtime_policy_id,departments(name),overtime_policies(name)",
+        )
+        .eq("organization_id", ctx.organization.id)
+        .eq("status", "active")
+        .order("full_name");
+      if (ctx.member.role === "manager" && ctx.member.department_id)
+        employeeQuery = employeeQuery.eq(
+          "department_id",
+          ctx.member.department_id,
+        );
+      let dailyQuery = supabase
+        .from("overtime_daily_summary")
+        .select("*")
+        .eq("organization_id", ctx.organization.id)
+        .gte("work_date", month + "-01")
+        .lte("work_date", monthEnd)
+        .order("work_date", { ascending: false });
+      let adjustmentQuery = supabase
+        .from("time_bank_adjustments")
+        .select("*,employees(full_name,employee_code)")
+        .eq("organization_id", ctx.organization.id)
+        .gte("work_date", month + "-01")
+        .lte("work_date", monthEnd)
+        .order("work_date", { ascending: false });
+      if (employeeId !== "all") {
+        dailyQuery = dailyQuery.eq("employee_id", employeeId);
+        adjustmentQuery = adjustmentQuery.eq("employee_id", employeeId);
+      }
+      const [e, d, b, p, c, a] = await Promise.all([
+        employeeQuery,
+        fetchSupabaseRows(dailyQuery),
+        supabase
+          .from("employee_time_bank_balance")
+          .select("*")
+          .eq("organization_id", ctx.organization.id),
+        supabase
+          .from("overtime_policies")
+          .select("*")
+          .eq("organization_id", ctx.organization.id)
+          .order("name"),
+        supabase
+          .from("overtime_calendar_rules")
+          .select("*,departments(name)")
+          .eq("organization_id", ctx.organization.id)
+          .gte("rule_date", month + "-01")
+          .lte("rule_date", monthEnd)
+          .order("rule_date"),
+        fetchSupabaseRows(adjustmentQuery),
+      ]);
+      if (e.error || b.error || p.error || c.error)
+        throw new Error(
+          e.error?.message ||
+            b.error?.message ||
+            p.error?.message ||
+            c.error?.message,
+        );
+      setEmployees(e.data ?? []);
+      setDaily(d);
+      setBalances(b.data ?? []);
+      setPolicies(p.data ?? []);
+      setCalendar(c.data ?? []);
+      setAdjustments(a);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível calcular o banco de horas.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    ctx.member.department_id,
+    ctx.member.role,
+    ctx.organization.id,
+    employeeId,
+    month,
+    monthEnd,
+  ]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const summaryRows = useMemo(
+    () =>
+      employees
+        .filter((person) => employeeId === "all" || person.id === employeeId)
+        .map((person) => {
+          const days = daily.filter((row) => row.employee_id === person.id);
+          const balance = balances.find((row) => row.employee_id === person.id);
+          return {
+            ...person,
+            overtime_50: days.reduce(
+              (sum, row) => sum + Number(row.overtime_50_minutes || 0),
+              0,
+            ),
+            overtime_100: days.reduce(
+              (sum, row) => sum + Number(row.overtime_100_minutes || 0),
+              0,
+            ),
+            payable: days.reduce(
+              (sum, row) => sum + Number(row.payable_overtime_minutes || 0),
+              0,
+            ),
+            month_delta:
+              days.reduce(
+                (sum, row) => sum + Number(row.bank_delta_minutes || 0),
+                0,
+              ) +
+              adjustments
+                .filter((item) => item.employee_id === person.id)
+                .reduce((sum, item) => sum + Number(item.minutes || 0), 0),
+            balance_minutes: Number(balance?.balance_minutes || 0),
+            policy_name:
+              relationOne(person.overtime_policies)?.name || "Regra padrão",
+          };
+        }),
+    [adjustments, balances, daily, employeeId, employees],
+  );
+  const totals = useMemo(
+    () =>
+      summaryRows.reduce(
+        (acc, row) => ({
+          balance: acc.balance + row.balance_minutes,
+          extra50: acc.extra50 + row.overtime_50,
+          extra100: acc.extra100 + row.overtime_100,
+          debit: acc.debit + Math.min(row.month_delta, 0),
+        }),
+        { balance: 0, extra50: 0, extra100: 0, debit: 0 },
+      ),
+    [summaryRows],
+  );
+  const ledger = useMemo(
+    () =>
+      [
+        ...daily.map((row) => ({
+          id: "d-" + row.employee_id + "-" + row.work_date,
+          work_date: row.work_date,
+          full_name: row.full_name,
+          kind: `${row.overtime_rule} · ${row.overtime_percent}%`,
+          credit: Number(row.overtime_minutes || 0),
+          debit: Number(row.debit_minutes || 0),
+          movement: Number(row.bank_delta_minutes || 0),
+          automatic: true,
+        })),
+        ...adjustments.map((item) => ({
+          id: item.id,
+          work_date: item.work_date,
+          full_name: relationOne(item.employees)?.full_name || "—",
+          kind: item.reason,
+          credit: Number(item.minutes) > 0 ? Number(item.minutes) : 0,
+          debit: Number(item.minutes) < 0 ? Math.abs(Number(item.minutes)) : 0,
+          movement: Number(item.minutes),
+          automatic: false,
+        })),
+      ].sort((a, b) => b.work_date.localeCompare(a.work_date)),
+    [adjustments, daily],
+  );
+
+  function newPolicy() {
+    setPolicyForm({
+      id: "",
+      name: "",
+      weekday_percent: 50,
+      saturday_percent: 50,
+      sunday_percent: 100,
+      holiday_percent: 100,
+      bank_50_multiplier: 1,
+      bank_100_multiplier: 1,
+      compensation_months: 6,
+      active: true,
+    });
+    setPolicyOpen(true);
+  }
+  function editPolicy(policy: any) {
+    setPolicyForm({
+      ...policy,
+      weekday_percent: Number(policy.weekday_percent),
+      saturday_percent: Number(policy.saturday_percent),
+      sunday_percent: Number(policy.sunday_percent),
+      holiday_percent: Number(policy.holiday_percent),
+      bank_50_multiplier: Number(policy.bank_50_multiplier),
+      bank_100_multiplier: Number(policy.bank_100_multiplier),
+    });
+    setPolicyOpen(true);
+  }
+  async function savePolicy(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    const payload = {
+      organization_id: ctx.organization.id,
+      name: policyForm.name,
+      weekday_percent: Number(policyForm.weekday_percent),
+      saturday_percent: Number(policyForm.saturday_percent),
+      sunday_percent: Number(policyForm.sunday_percent),
+      holiday_percent: Number(policyForm.holiday_percent),
+      bank_50_multiplier: Number(policyForm.bank_50_multiplier),
+      bank_100_multiplier: Number(policyForm.bank_100_multiplier),
+      compensation_months: Number(policyForm.compensation_months),
+      active: Boolean(policyForm.active),
+      updated_at: new Date().toISOString(),
+    };
+    const result = policyForm.id
+      ? await supabase
+          .from("overtime_policies")
+          .update(payload)
+          .eq("id", policyForm.id)
+      : await supabase.from("overtime_policies").insert(payload);
+    if (result.error) return setError(result.error.message);
+    setPolicyOpen(false);
+    load();
+  }
+  async function saveCalendar(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { error } = await supabase
+      .from("overtime_calendar_rules")
+      .insert({
+        organization_id: ctx.organization.id,
+        rule_date: calendarForm.rule_date,
+        title: calendarForm.title,
+        overtime_percent: Number(calendarForm.overtime_percent),
+        count_all_worked_as_overtime: calendarForm.count_all_worked_as_overtime,
+        applies_to_department_id: calendarForm.applies_to_department_id || null,
+        created_by: user?.id,
+      });
+    if (error) return setError(error.message);
+    setCalendarOpen(false);
+    setCalendarForm({ ...calendarForm, title: "" });
+    load();
+  }
+  async function removeCalendar(row: any) {
+    if (!confirm(`Excluir a regra de ${dateLabel(row.rule_date)}?`)) return;
+    const { error } = await supabase
+      .from("overtime_calendar_rules")
+      .delete()
+      .eq("id", row.id);
+    if (error) setError(error.message);
+    else load();
+  }
+  async function saveAdjustment(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const raw = Math.round(Number(adjustForm.hours) * 60);
+    const negative = ["debit", "compensation", "payment"].includes(
+      adjustForm.entry_type,
+    );
+    const minutesValue = negative ? -Math.abs(raw) : Math.abs(raw);
+    const { error } = await supabase
+      .from("time_bank_adjustments")
+      .insert({
+        organization_id: ctx.organization.id,
+        employee_id: adjustForm.employee_id,
+        work_date: adjustForm.work_date,
+        entry_type: adjustForm.entry_type,
+        minutes: minutesValue,
+        reason: adjustForm.reason,
+        created_by: user?.id,
+      });
+    if (error) return setError(error.message);
+    setAdjustOpen(false);
+    setAdjustForm({ ...adjustForm, hours: 1, reason: "" });
+    load();
+  }
+
+  return (
+    <>
+      <PageHead
+        title="Banco de horas"
+        desc="Horas extras 50% e 100%, créditos, débitos e pagamento por colaborador"
+        action={
+          canManage ? (
+            <Button
+              onClick={() => {
+                setAdjustForm({
+                  ...adjustForm,
+                  employee_id: employeeId === "all" ? "" : employeeId,
+                });
+                setAdjustOpen(true);
+              }}
+            >
+              <Plus />
+              Lançar ajuste
+            </Button>
+          ) : undefined
+        }
+      />
+      <div className="time-bank-tabs">
+        <button
+          className={tab === "balances" ? "active" : ""}
+          onClick={() => setTab("balances")}
+        >
+          <History />
+          Saldos e extrato
+        </button>
+        <button
+          className={tab === "rules" ? "active" : ""}
+          onClick={() => setTab("rules")}
+        >
+          <Settings />
+          Regras de cálculo
+        </button>
+        <button
+          className={tab === "calendar" ? "active" : ""}
+          onClick={() => setTab("calendar")}
+        >
+          <CalendarDays />
+          Calendário 50% / 100%
+        </button>
+      </div>
+      <ErrorBox message={error} />
+      {tab === "balances" && (
+        <>
+          <section className="surface time-bank-filter">
+            <label>
+              Mês
+              <Input
+                type="month"
+                value={month}
+                onChange={(event) => setMonth(event.target.value)}
+              />
+            </label>
+            <label>
+              Colaborador
+              <select
+                value={employeeId}
+                onChange={(event) => setEmployeeId(event.target.value)}
+              >
+                <option value="all">Todos os colaboradores</option>
+                {employees.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.full_name} · {person.employee_code}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button variant="outline" onClick={load} disabled={loading}>
+              <RefreshCw className={loading ? "spin" : ""} />
+              Atualizar
+            </Button>
+          </section>
+          <section className="metrics time-bank-metrics">
+            {[
+              [
+                minutes(totals.balance),
+                "Saldo acumulado",
+                "Créditos menos compensações",
+              ],
+              [minutes(totals.extra50), "Extra 50%", "No mês selecionado"],
+              [minutes(totals.extra100), "Extra 100%", "No mês selecionado"],
+              [minutes(totals.debit), "Débitos do mês", "Horas a compensar"],
+            ].map((metric, index) => (
+              <article key={metric[1]}>
+                <span className={"metric-mark m" + index} />
+                <div>
+                  <b>{metric[0]}</b>
+                  <p>{metric[1]}</p>
+                  <small>{metric[2]}</small>
+                </div>
+              </article>
+            ))}
+          </section>
+          <section className="surface table-surface">
+            <header className="time-bank-section-head">
+              <div>
+                <h2>Resumo por colaborador</h2>
+                <p>
+                  O saldo acumulado considera todo o histórico e os ajustes
+                  manuais.
+                </p>
+              </div>
+            </header>
+            <div className="responsive-table">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Colaborador</TableHead>
+                    <TableHead>Destino</TableHead>
+                    <TableHead>Regra</TableHead>
+                    <TableHead>Extra 50%</TableHead>
+                    <TableHead>Extra 100%</TableHead>
+                    <TableHead>Movimento no mês</TableHead>
+                    <TableHead>Saldo acumulado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {summaryRows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>
+                        <b>{row.full_name}</b>
+                        <br />
+                        <small>
+                          {row.employee_code} ·{" "}
+                          {relationOne(row.departments)?.name || "Sem setor"}
+                        </small>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          color={
+                            row.overtime_mode === "bank"
+                              ? "blue"
+                              : row.overtime_mode === "pay"
+                                ? "green"
+                                : "gray"
+                          }
+                        >
+                          {overtimeModeLabels[row.overtime_mode]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{row.policy_name}</TableCell>
+                      <TableCell>{minutes(row.overtime_50)}</TableCell>
+                      <TableCell>{minutes(row.overtime_100)}</TableCell>
+                      <TableCell>
+                        <Badge color={row.month_delta >= 0 ? "green" : "amber"}>
+                          {minutes(row.month_delta)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <b
+                          className={
+                            row.balance_minutes < 0
+                              ? "negative-balance"
+                              : "positive-balance"
+                          }
+                        >
+                          {minutes(row.balance_minutes)}
+                        </b>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+          <section className="surface table-surface">
+            <header className="time-bank-section-head">
+              <div>
+                <h2>Extrato do período</h2>
+                <p>Registros automáticos e lançamentos feitos pelo RH.</p>
+              </div>
+            </header>
+            <div className="responsive-table">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Colaborador</TableHead>
+                    <TableHead>Origem</TableHead>
+                    <TableHead>Crédito</TableHead>
+                    <TableHead>Débito</TableHead>
+                    <TableHead>Movimento no banco</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {ledger.length ? (
+                    ledger.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell>{dateLabel(row.work_date)}</TableCell>
+                        <TableCell>
+                          <b>{row.full_name}</b>
+                        </TableCell>
+                        <TableCell>
+                          {row.kind}
+                          <br />
+                          <small>
+                            {row.automatic
+                              ? "Calculado automaticamente"
+                              : "Lançamento do RH"}
+                          </small>
+                        </TableCell>
+                        <TableCell>
+                          {row.credit ? minutes(row.credit) : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {row.debit ? minutes(row.debit) : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge color={row.movement >= 0 ? "green" : "amber"}>
+                            {minutes(row.movement)}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={6}>
+                        Nenhum movimento encontrado no período.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+        </>
+      )}
+      {tab === "rules" && (
+        <>
+          <section className="surface time-bank-explainer">
+            <ShieldCheck />
+            <div>
+              <h2>Como o PontoNorte calcula</h2>
+              <p>
+                Primeiro compara o tempo trabalhado com a meta da jornada.
+                Depois identifica o tipo do dia e aplica a regra escolhida na
+                ficha do funcionário. O resultado vai para pagamento, banco ou
+                fica apenas informativo.
+              </p>
+            </div>
+          </section>
+          <section className="time-bank-policy-grid">
+            {policies.map((policy) => (
+              <article className="surface overtime-policy-card" key={policy.id}>
+                <header>
+                  <span>
+                    <Clock3 />
+                  </span>
+                  <Badge color={policy.active ? "green" : "gray"}>
+                    {policy.active ? "Ativa" : "Inativa"}
+                  </Badge>
+                </header>
+                <h2>{policy.name}</h2>
+                <div>
+                  <span>
+                    <small>Dia útil</small>
+                    <b>{policy.weekday_percent}%</b>
+                  </span>
+                  <span>
+                    <small>Sábado</small>
+                    <b>{policy.saturday_percent}%</b>
+                  </span>
+                  <span>
+                    <small>Domingo</small>
+                    <b>{policy.sunday_percent}%</b>
+                  </span>
+                  <span>
+                    <small>Feriado</small>
+                    <b>{policy.holiday_percent}%</b>
+                  </span>
+                </div>
+                <p>
+                  Compensação em até {policy.compensation_months} meses · banco
+                  50% ×{policy.bank_50_multiplier} · banco 100% ×
+                  {policy.bank_100_multiplier}
+                </p>
+                {canManage && (
+                  <Button variant="outline" onClick={() => editPolicy(policy)}>
+                    <Pencil />
+                    Editar regra
+                  </Button>
+                )}
+              </article>
+            ))}
+          </section>
+          {canManage && (
+            <Button
+              className="time-bank-add-policy"
+              variant="outline"
+              onClick={newPolicy}
+            >
+              <Plus />
+              Criar outra regra
+            </Button>
+          )}
+        </>
+      )}
+      {tab === "calendar" && (
+        <>
+          <section className="surface time-bank-calendar-head">
+            <div>
+              <h2>Dias especiais</h2>
+              <p>
+                Cadastre feriados, folgas trabalhadas ou datas que precisam ser
+                classificadas diretamente como 50% ou 100%.
+              </p>
+            </div>
+            {canManage && (
+              <Button onClick={() => setCalendarOpen(true)}>
+                <Plus />
+                Adicionar data
+              </Button>
+            )}
+          </section>
+          <section className="surface table-surface responsive-table">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Setor</TableHead>
+                  <TableHead>Adicional</TableHead>
+                  <TableHead>Cálculo</TableHead>
+                  <TableHead>Ação</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {calendar.length ? (
+                  calendar.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>
+                        <b>{dateLabel(row.rule_date)}</b>
+                      </TableCell>
+                      <TableCell>{row.title}</TableCell>
+                      <TableCell>
+                        {relationOne(row.departments)?.name || "Toda a empresa"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          color={
+                            Number(row.overtime_percent) >= 100
+                              ? "amber"
+                              : "blue"
+                          }
+                        >
+                          {row.overtime_percent}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {row.count_all_worked_as_overtime
+                          ? "Todo o período trabalhado"
+                          : "Somente o que exceder a meta"}
+                      </TableCell>
+                      <TableCell>
+                        {canManage && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => removeCalendar(row)}
+                          >
+                            Excluir
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6}>
+                      Nenhuma regra especial neste mês. O sistema usará as
+                      regras da política.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </section>
+        </>
+      )}
+      <Dialog open={policyOpen} onOpenChange={setPolicyOpen}>
+        <DialogContent className="wide-dialog responsive-dialog">
+          <DialogHeader>
+            <DialogTitle>
+              {policyForm.id ? "Editar regra" : "Nova regra de horas extras"}
+            </DialogTitle>
+            <DialogDescription>
+              Os valores devem refletir a convenção, o acordo e a política da
+              empresa.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="form-grid" onSubmit={savePolicy}>
+            <label>
+              Nome da regra
+              <Input
+                required
+                value={policyForm.name}
+                onChange={(e) =>
+                  setPolicyForm({ ...policyForm, name: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Dia útil (%)
+              <Input
+                type="number"
+                min={0}
+                max={300}
+                step={0.01}
+                value={policyForm.weekday_percent}
+                onChange={(e) =>
+                  setPolicyForm({
+                    ...policyForm,
+                    weekday_percent: e.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Sábado (%)
+              <Input
+                type="number"
+                min={0}
+                max={300}
+                step={0.01}
+                value={policyForm.saturday_percent}
+                onChange={(e) =>
+                  setPolicyForm({
+                    ...policyForm,
+                    saturday_percent: e.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Domingo (%)
+              <Input
+                type="number"
+                min={0}
+                max={300}
+                step={0.01}
+                value={policyForm.sunday_percent}
+                onChange={(e) =>
+                  setPolicyForm({
+                    ...policyForm,
+                    sunday_percent: e.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Feriado (%)
+              <Input
+                type="number"
+                min={0}
+                max={300}
+                step={0.01}
+                value={policyForm.holiday_percent}
+                onChange={(e) =>
+                  setPolicyForm({
+                    ...policyForm,
+                    holiday_percent: e.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Multiplicador no banco — 50%
+              <Input
+                type="number"
+                min={0}
+                max={5}
+                step={0.01}
+                value={policyForm.bank_50_multiplier}
+                onChange={(e) =>
+                  setPolicyForm({
+                    ...policyForm,
+                    bank_50_multiplier: e.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Multiplicador no banco — 100%
+              <Input
+                type="number"
+                min={0}
+                max={5}
+                step={0.01}
+                value={policyForm.bank_100_multiplier}
+                onChange={(e) =>
+                  setPolicyForm({
+                    ...policyForm,
+                    bank_100_multiplier: e.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Prazo de compensação (meses)
+              <Input
+                type="number"
+                min={1}
+                max={24}
+                value={policyForm.compensation_months}
+                onChange={(e) =>
+                  setPolicyForm({
+                    ...policyForm,
+                    compensation_months: e.target.value,
+                  })
+                }
+              />
+            </label>
+            <ErrorBox message={error} />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPolicyOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button>Salvar regra</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}>
+        <DialogContent className="wide-dialog responsive-dialog">
+          <DialogHeader>
+            <DialogTitle>Adicionar dia especial</DialogTitle>
+            <DialogDescription>
+              A regra desta data tem prioridade sobre sábado, domingo e feriado
+              automático.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="form-grid" onSubmit={saveCalendar}>
+            <label>
+              Data
+              <Input
+                required
+                type="date"
+                value={calendarForm.rule_date}
+                onChange={(e) =>
+                  setCalendarForm({
+                    ...calendarForm,
+                    rule_date: e.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Descrição
+              <Input
+                required
+                placeholder="Ex.: Feriado municipal"
+                value={calendarForm.title}
+                onChange={(e) =>
+                  setCalendarForm({ ...calendarForm, title: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Adicional
+              <select
+                value={calendarForm.overtime_percent}
+                onChange={(e) =>
+                  setCalendarForm({
+                    ...calendarForm,
+                    overtime_percent: +e.target.value,
+                  })
+                }
+              >
+                <option value={50}>Hora extra 50%</option>
+                <option value={100}>Hora extra 100%</option>
+                <option value={0}>Sem adicional</option>
+              </select>
+            </label>
+            <label>
+              Aplicação
+              <select
+                value={calendarForm.applies_to_department_id}
+                onChange={(e) =>
+                  setCalendarForm({
+                    ...calendarForm,
+                    applies_to_department_id: e.target.value,
+                  })
+                }
+              >
+                <option value="">Toda a empresa</option>
+                {Array.from(
+                  new Map(
+                    employees.map((person) => [
+                      person.department_id,
+                      relationOne(person.departments),
+                    ]),
+                  ).entries(),
+                )
+                  .filter(([id]) => id)
+                  .map(([id, department]: any) => (
+                    <option key={id} value={id}>
+                      {department?.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="full-row check-line">
+              <input
+                type="checkbox"
+                checked={calendarForm.count_all_worked_as_overtime}
+                onChange={(e) =>
+                  setCalendarForm({
+                    ...calendarForm,
+                    count_all_worked_as_overtime: e.target.checked,
+                  })
+                }
+              />
+              Contar todo o período trabalhado como hora extra
+            </label>
+            <ErrorBox message={error} />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCalendarOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button>Adicionar ao calendário</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
+        <DialogContent className="wide-dialog responsive-dialog">
+          <DialogHeader>
+            <DialogTitle>Lançamento no banco de horas</DialogTitle>
+            <DialogDescription>
+              Todo ajuste fica registrado no extrato. Informe um motivo
+              objetivo.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="form-grid" onSubmit={saveAdjustment}>
+            <label>
+              Colaborador
+              <select
+                required
+                value={adjustForm.employee_id}
+                onChange={(e) =>
+                  setAdjustForm({ ...adjustForm, employee_id: e.target.value })
+                }
+              >
+                <option value="">Selecione</option>
+                {employees.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.full_name} · {person.employee_code}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Data
+              <Input
+                required
+                type="date"
+                value={adjustForm.work_date}
+                onChange={(e) =>
+                  setAdjustForm({ ...adjustForm, work_date: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Tipo
+              <select
+                value={adjustForm.entry_type}
+                onChange={(e) =>
+                  setAdjustForm({ ...adjustForm, entry_type: e.target.value })
+                }
+              >
+                <option value="credit">Crédito autorizado</option>
+                <option value="debit">Débito autorizado</option>
+                <option value="compensation">Folga / compensação</option>
+                <option value="payment">Horas pagas em folha</option>
+                <option value="opening">Saldo inicial</option>
+              </select>
+            </label>
+            <label>
+              Quantidade de horas
+              <Input
+                required
+                type="number"
+                min={0.01}
+                max={1000}
+                step={0.01}
+                value={adjustForm.hours}
+                onChange={(e) =>
+                  setAdjustForm({ ...adjustForm, hours: +e.target.value })
+                }
+              />
+            </label>
+            <label className="full-row">
+              Motivo
+              <Input
+                required
+                minLength={3}
+                placeholder="Ex.: Compensação autorizada em 14/09"
+                value={adjustForm.reason}
+                onChange={(e) =>
+                  setAdjustForm({ ...adjustForm, reason: e.target.value })
+                }
+              />
+            </label>
+            <ErrorBox message={error} />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAdjustOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button>Salvar lançamento</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function Schedules({ ctx }: { ctx: Context }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [form, setForm] = useState({
+    name: "",
+    schedule_type: "flexible",
+    weekly_hours: 44,
+    daily_hours: 8,
+    start_time: "08:00",
+    break_start: "12:00",
+    break_end: "13:00",
+    end_time: "17:00",
+    tolerance_minutes: 10,
+  });
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from("work_schedules")
+      .select("*")
+      .eq("organization_id", ctx.organization.id)
+      .order("name");
+    setRows(data ?? []);
+  }, [ctx.organization.id]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    const fixed = form.schedule_type === "fixed";
+    await supabase
+      .from("work_schedules")
+      .insert({
+        organization_id: ctx.organization.id,
+        name: form.name,
+        schedule_type: form.schedule_type,
+        weekly_minutes: Math.round(form.weekly_hours * 60),
+        daily_minutes: Math.round(form.daily_hours * 60),
+        start_time: fixed ? form.start_time : null,
+        break_start: fixed ? form.break_start : null,
+        break_end: fixed ? form.break_end : null,
+        end_time: fixed ? form.end_time : null,
+        tolerance_minutes: form.tolerance_minutes,
+      });
+    setForm({ ...form, name: "" });
+    load();
+  }
+  return (
+    <>
+      <PageHead
+        title="Jornadas"
+        desc="Carga contratual fixa ou flexível, com saldo automático"
+      />
+      {roleCanManage(ctx.member.role) && (
+        <form className="surface schedule-form" onSubmit={add}>
+          <label>
+            Nome
+            <Input
+              required
+              placeholder="Ex.: Flexível 44h"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+          </label>
+          <label>
+            Modelo
+            <select
+              value={form.schedule_type}
+              onChange={(e) =>
+                setForm({ ...form, schedule_type: e.target.value })
+              }
+            >
+              <option value="flexible">Flexível</option>
+              <option value="fixed">Horário fixo</option>
+            </select>
+          </label>
+          <label>
+            Horas semanais
+            <Input
+              type="number"
+              min={1}
+              max={168}
+              step={0.5}
+              value={form.weekly_hours}
+              onChange={(e) =>
+                setForm({ ...form, weekly_hours: +e.target.value })
+              }
+            />
+          </label>
+          <label>
+            Meta diária
+            <Input
+              type="number"
+              min={1}
+              max={24}
+              step={0.5}
+              value={form.daily_hours}
+              onChange={(e) =>
+                setForm({ ...form, daily_hours: +e.target.value })
+              }
+            />
+          </label>
+          {form.schedule_type === "fixed" && (
+            <>
+              <label>
+                Entrada
+                <Input
+                  type="time"
+                  value={form.start_time}
+                  onChange={(e) =>
+                    setForm({ ...form, start_time: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Intervalo início
+                <Input
+                  type="time"
+                  value={form.break_start}
+                  onChange={(e) =>
+                    setForm({ ...form, break_start: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Intervalo fim
+                <Input
+                  type="time"
+                  value={form.break_end}
+                  onChange={(e) =>
+                    setForm({ ...form, break_end: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Saída
+                <Input
+                  type="time"
+                  value={form.end_time}
+                  onChange={(e) =>
+                    setForm({ ...form, end_time: e.target.value })
+                  }
+                />
+              </label>
+            </>
+          )}
+          <label>
+            Tolerância (min)
+            <Input
+              type="number"
+              min={0}
+              max={180}
+              value={form.tolerance_minutes}
+              onChange={(e) =>
+                setForm({ ...form, tolerance_minutes: +e.target.value })
+              }
+            />
+          </label>
+          <Button>
+            <Plus />
+            Adicionar jornada
+          </Button>
+        </form>
+      )}
+      <section className="surface table-surface">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nome</TableHead>
+              <TableHead>Modelo</TableHead>
+              <TableHead>Carga semanal</TableHead>
+              <TableHead>Meta diária</TableHead>
+              <TableHead>Horário</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell>
+                  <b>{r.name}</b>
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    color={r.schedule_type === "flexible" ? "green" : "blue"}
+                  >
+                    {r.schedule_type === "flexible" ? "Flexível" : "Fixo"}
+                  </Badge>
+                </TableCell>
+                <TableCell>{minutes(r.weekly_minutes)}</TableCell>
+                <TableCell>{minutes(r.daily_minutes)}</TableCell>
+                <TableCell>
+                  {r.schedule_type === "flexible"
+                    ? "Entrada e saída livres"
+                    : `${r.start_time?.slice(0, 5)}–${r.end_time?.slice(0, 5)}`}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </section>
+    </>
+  );
+}
+
+function ReviewEntries({ ctx }: { ctx: Context }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from("time_entries")
+      .select(
+        "*,employees(full_name,job_title,department_id),time_entry_reviews(*)",
+      )
+      .eq("organization_id", ctx.organization.id)
+      .gte("occurred_at", todayStart())
+      .order("occurred_at", { ascending: false });
+    setRows(data ?? []);
+  }, [ctx.organization.id]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  async function review(row: any, status: string) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase
+      .from("time_entry_reviews")
+      .upsert(
+        {
+          organization_id: row.organization_id,
+          time_entry_id: row.id,
+          employee_id: row.employee_id,
+          reviewer_user_id: user.id,
+          status,
+        },
+        { onConflict: "time_entry_id,reviewer_user_id" },
+      );
+    load();
+  }
+  return (
+    <>
+      <PageHead
+        title="Conferência de pontos"
+        desc="Líderes confirmam os registros do próprio setor sem alterar a marcação original"
+      />
+      <section className="surface table-surface">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Funcionário</TableHead>
+              <TableHead>Registro</TableHead>
+              <TableHead>Método</TableHead>
+              <TableHead>Conferência</TableHead>
+              <TableHead>Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => {
+              const own = r.time_entry_reviews?.find(
+                (x: any) => x.reviewer_user_id === ctx.member.user_id,
+              );
+              return (
+                <TableRow key={r.id}>
+                  <TableCell>{r.employees?.full_name}</TableCell>
+                  <TableCell>
+                    {eventLabels[r.event_type]} · {dateTime(r.occurred_at)}
+                  </TableCell>
+                  <TableCell>{methodLabels[r.method] ?? r.method}</TableCell>
+                  <TableCell>
+                    <Badge
+                      color={
+                        own?.status === "confirmed"
+                          ? "green"
+                          : own
+                            ? "amber"
+                            : "gray"
+                      }
+                    >
+                      {own?.status === "confirmed"
+                        ? "Confirmado"
+                        : own
+                          ? "Divergência"
+                          : "Pendente"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="row-actions">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => review(r, "confirmed")}
+                      >
+                        <Check />
+                        Confirmar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => review(r, "forwarded_to_hr")}
+                      >
+                        <CircleAlert />
+                        Enviar ao RH
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </section>
+    </>
+  );
+}
+
+function RollCall({ ctx }: { ctx: Context }) {
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [marks, setMarks] = useState<Record<string, string>>({});
+  const [note, setNote] = useState("");
+  const [saved, setSaved] = useState(false);
+  const departmentId = ctx.member.department_id;
+  useEffect(() => {
+    if (!departmentId) return;
+    supabase
+      .from("employees")
+      .select("*")
+      .eq("organization_id", ctx.organization.id)
+      .eq("department_id", departmentId)
+      .eq("status", "active")
+      .order("full_name")
+      .then(({ data }) => setEmployees(data ?? []));
+  }, [ctx.organization.id, departmentId]);
+  async function finish() {
+    if (!departmentId) return;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    const date = new Date().toISOString().slice(0, 10);
+    const { data: call, error } = await supabase
+      .from("attendance_calls")
+      .upsert(
+        {
+          organization_id: ctx.organization.id,
+          department_id: departmentId,
+          call_date: date,
+          period: "daily",
+          status: "completed",
+          notes: note,
+          created_by: user.id,
+          completed_at: new Date().toISOString(),
+        },
+        { onConflict: "department_id,call_date,period" },
+      )
+      .select("id")
+      .single();
+    if (error || !call) return;
+    await supabase.from("attendance_call_items").upsert(
+      employees.map((e) => ({
+        call_id: call.id,
+        organization_id: ctx.organization.id,
+        employee_id: e.id,
+        mark: marks[e.id] || "absent",
+        marked_at: new Date().toISOString(),
+      })),
+      { onConflict: "call_id,employee_id" },
+    );
     setSaved(true);
   }
-  if(!departmentId&&ctx.member.role==="manager")return <section className="surface empty-state"><CircleAlert/><h2>Líder sem setor</h2><p>O RH precisa vincular este líder a um setor.</p></section>;
-  return <><PageHead title="Chamada do setor" desc="Marque a presença e conclua a chamada" action={<Button onClick={finish}><Check/>Concluir chamada</Button>}/>{saved&&<div className="success-banner"><Check/>Chamada salva e enviada ao RH.</div>}<section className="call-layout"><article className="surface"><div className="call-list">{employees.map(p=><div key={p.id}><span className="avatar">{initials(p.full_name)}</span><p><b>{p.full_name}</b><small>{p.job_title||"Funcionário"}</small></p><div className="mark-options">{[["present","Presente"],["late","Atraso"],["absent","Ausente"],["excused","Justificado"]].map(([v,l])=><button key={v} className={marks[p.id]===v?v:""} onClick={()=>setMarks({...marks,[p.id]:v})}>{l}</button>)}</div></div>)}</div></article><aside className="surface call-summary"><h2>Resumo</h2><div><span><b>{Object.values(marks).filter(v=>v==="present").length}</b> presentes</span><span><b>{Object.values(marks).filter(v=>v==="late").length}</b> atrasos</span><span><b>{Object.values(marks).filter(v=>v==="absent").length}</b> ausentes</span><span><b>{employees.length-Object.keys(marks).length}</b> não marcados</span></div><label>Observação<textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Observação para o RH"/></label></aside></section></>
+  if (!departmentId && ctx.member.role === "manager")
+    return (
+      <section className="surface empty-state">
+        <CircleAlert />
+        <h2>Líder sem setor</h2>
+        <p>O RH precisa vincular este líder a um setor.</p>
+      </section>
+    );
+  return (
+    <>
+      <PageHead
+        title="Chamada do setor"
+        desc="Marque a presença e conclua a chamada"
+        action={
+          <Button onClick={finish}>
+            <Check />
+            Concluir chamada
+          </Button>
+        }
+      />
+      {saved && (
+        <div className="success-banner">
+          <Check />
+          Chamada salva e enviada ao RH.
+        </div>
+      )}
+      <section className="call-layout">
+        <article className="surface">
+          <div className="call-list">
+            {employees.map((p) => (
+              <div key={p.id}>
+                <span className="avatar">{initials(p.full_name)}</span>
+                <p>
+                  <b>{p.full_name}</b>
+                  <small>{p.job_title || "Funcionário"}</small>
+                </p>
+                <div className="mark-options">
+                  {[
+                    ["present", "Presente"],
+                    ["late", "Atraso"],
+                    ["absent", "Ausente"],
+                    ["excused", "Justificado"],
+                  ].map(([v, l]) => (
+                    <button
+                      key={v}
+                      className={marks[p.id] === v ? v : ""}
+                      onClick={() => setMarks({ ...marks, [p.id]: v })}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </article>
+        <aside className="surface call-summary">
+          <h2>Resumo</h2>
+          <div>
+            <span>
+              <b>
+                {Object.values(marks).filter((v) => v === "present").length}
+              </b>{" "}
+              presentes
+            </span>
+            <span>
+              <b>{Object.values(marks).filter((v) => v === "late").length}</b>{" "}
+              atrasos
+            </span>
+            <span>
+              <b>{Object.values(marks).filter((v) => v === "absent").length}</b>{" "}
+              ausentes
+            </span>
+            <span>
+              <b>{employees.length - Object.keys(marks).length}</b> não marcados
+            </span>
+          </div>
+          <label>
+            Observação
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Observação para o RH"
+            />
+          </label>
+        </aside>
+      </section>
+    </>
+  );
 }
 
-function Occurrences({ctx}:{ctx:Context}){
-  const [rows,setRows]=useState<any[]>([]);
-  const load=useCallback(async()=>{const{data}=await supabase.from("justifications").select("*,employees(full_name)").eq("organization_id",ctx.organization.id).order("created_at",{ascending:false});setRows(data??[])},[ctx.organization.id]);
-  useEffect(()=>{load()},[load]);
-  async function decide(id:string,status:string){const{data:{user}}=await supabase.auth.getUser();await supabase.from("justifications").update({status,reviewed_by:user?.id,reviewed_at:new Date().toISOString()}).eq("id",id);load()}
-  return <><PageHead title="Ocorrências e justificativas" desc="Atestados, faltas e análises do RH"/><section className="surface table-surface"><Table><TableHeader><TableRow><TableHead>Funcionário</TableHead><TableHead>Tipo</TableHead><TableHead>Período</TableHead><TableHead>Status</TableHead><TableHead>Ações</TableHead></TableRow></TableHeader><TableBody>{rows.map(r=><TableRow key={r.id}><TableCell>{r.employees?.full_name}</TableCell><TableCell>{r.kind}</TableCell><TableCell>{dateTime(r.starts_at)} a {dateTime(r.ends_at)}</TableCell><TableCell><Badge color={r.status==="approved"?"green":r.status==="rejected"?"amber":"gray"}>{r.status}</Badge></TableCell><TableCell>{r.status==="pending"&&<div className="row-actions"><Button size="sm" onClick={()=>decide(r.id,"approved")}>Aprovar</Button><Button size="sm" variant="outline" onClick={()=>decide(r.id,"rejected")}>Rejeitar</Button></div>}</TableCell></TableRow>)}</TableBody></Table></section></>
+function Occurrences({ ctx }: { ctx: Context }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from("justifications")
+      .select("*,employees(full_name)")
+      .eq("organization_id", ctx.organization.id)
+      .order("created_at", { ascending: false });
+    setRows(data ?? []);
+  }, [ctx.organization.id]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  async function decide(id: string, status: string) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    await supabase
+      .from("justifications")
+      .update({
+        status,
+        reviewed_by: user?.id,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    load();
+  }
+  return (
+    <>
+      <PageHead
+        title="Ocorrências e justificativas"
+        desc="Atestados, faltas e análises do RH"
+      />
+      <section className="surface table-surface">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Funcionário</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Período</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell>{r.employees?.full_name}</TableCell>
+                <TableCell>{r.kind}</TableCell>
+                <TableCell>
+                  {dateTime(r.starts_at)} a {dateTime(r.ends_at)}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    color={
+                      r.status === "approved"
+                        ? "green"
+                        : r.status === "rejected"
+                          ? "amber"
+                          : "gray"
+                    }
+                  >
+                    {r.status}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  {r.status === "pending" && (
+                    <div className="row-actions">
+                      <Button
+                        size="sm"
+                        onClick={() => decide(r.id, "approved")}
+                      >
+                        Aprovar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => decide(r.id, "rejected")}
+                      >
+                        Rejeitar
+                      </Button>
+                    </div>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </section>
+    </>
+  );
 }
 
-type ReportKind = "summary"|"daily"|"general"|"presence"|"absence"|"entries"|"overtime"|"time_bank"|"occurrences"|"monthly"|"employees"|"employee_record";
-type ReportFilters = {kind:ReportKind;start:string;end:string;employeeId:string};
-type ReportColumn = {label:string;value:(row:any)=>React.ReactNode;text:(row:any)=>string};
+type ReportKind =
+  | "summary"
+  | "daily"
+  | "general"
+  | "presence"
+  | "absence"
+  | "entries"
+  | "overtime"
+  | "time_bank"
+  | "occurrences"
+  | "monthly"
+  | "employees"
+  | "employee_record";
+type ReportFilters = {
+  kind: ReportKind;
+  start: string;
+  end: string;
+  employeeId: string;
+};
+type ReportColumn = {
+  label: string;
+  value: (row: any) => React.ReactNode;
+  text: (row: any) => string;
+};
 
-const reportKinds:{id:ReportKind;title:string;description:string;icon:React.ComponentType<{className?:string}>}[] = [
-  {id:"summary",title:"Resumo do período",description:"Totais por colaborador, saldo e ocorrências.",icon:FileText},
-  {id:"daily",title:"Ponto do dia",description:"Entrada, intervalo, saída e situação de hoje.",icon:CalendarCheck},
-  {id:"general",title:"Relatório geral",description:"Visão diária completa de toda a equipe.",icon:FileSpreadsheet},
-  {id:"presence",title:"Presenças",description:"Dias com pelo menos um registro de ponto.",icon:UserCheck},
-  {id:"absence",title:"Faltas e ausências",description:"Dias previstos sem registro, com justificativa.",icon:CircleAlert},
-  {id:"entries",title:"Registros de ponto",description:"Cada entrada, intervalo e saída efetuada.",icon:Clock3},
-  {id:"overtime",title:"Horas extras e banco",description:"Extra 50%, extra 100%, créditos, débitos e destino.",icon:History},
-  {id:"time_bank",title:"Banco de horas",description:"Créditos, débitos e saldo diário por funcionário.",icon:History},
-  {id:"occurrences",title:"Ocorrências",description:"Justificativas, atestados e análises do RH.",icon:FileCheck2},
-  {id:"monthly",title:"Espelho mensal individual",description:"Fechamento completo de um funcionário no mês.",icon:CalendarDays},
-  {id:"employees",title:"Funcionários",description:"Relação cadastral de ativos e desligados.",icon:UsersRound},
-  {id:"employee_record",title:"Ficha de empregado",description:"Ficha cadastral preenchida no modelo oficial enviado.",icon:FileText},
+const reportKinds: {
+  id: ReportKind;
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  {
+    id: "summary",
+    title: "Resumo do período",
+    description: "Totais por colaborador, saldo e ocorrências.",
+    icon: FileText,
+  },
+  {
+    id: "daily",
+    title: "Ponto do dia",
+    description: "Entrada, intervalo, saída e situação de hoje.",
+    icon: CalendarCheck,
+  },
+  {
+    id: "general",
+    title: "Relatório geral",
+    description: "Visão diária completa de toda a equipe.",
+    icon: FileSpreadsheet,
+  },
+  {
+    id: "presence",
+    title: "Presenças",
+    description: "Dias com pelo menos um registro de ponto.",
+    icon: UserCheck,
+  },
+  {
+    id: "absence",
+    title: "Faltas e ausências",
+    description: "Dias previstos sem registro, com justificativa.",
+    icon: CircleAlert,
+  },
+  {
+    id: "entries",
+    title: "Registros de ponto",
+    description: "Cada entrada, intervalo e saída efetuada.",
+    icon: Clock3,
+  },
+  {
+    id: "overtime",
+    title: "Horas extras e banco",
+    description: "Extra 50%, extra 100%, créditos, débitos e destino.",
+    icon: History,
+  },
+  {
+    id: "time_bank",
+    title: "Banco de horas",
+    description: "Créditos, débitos e saldo diário por funcionário.",
+    icon: History,
+  },
+  {
+    id: "occurrences",
+    title: "Ocorrências",
+    description: "Justificativas, atestados e análises do RH.",
+    icon: FileCheck2,
+  },
+  {
+    id: "monthly",
+    title: "Espelho mensal individual",
+    description: "Fechamento completo de um funcionário no mês.",
+    icon: CalendarDays,
+  },
+  {
+    id: "employees",
+    title: "Funcionários",
+    description: "Relação cadastral de ativos e desligados.",
+    icon: UsersRound,
+  },
+  {
+    id: "employee_record",
+    title: "Ficha de empregado",
+    description: "Ficha cadastral preenchida no modelo oficial enviado.",
+    icon: FileText,
+  },
 ];
-const reportStatus:Record<string,string>={completed:"Jornada cumprida",debit:"Saldo em débito",open:"Em andamento",absent:"Ausente",no_record:"Sem registro",excused:"Ausência justificada"};
-const occurrenceStatus:Record<string,string>={pending:"Pendente",approved:"Aprovada",rejected:"Rejeitada"};
-const employeeStatus:Record<string,string>={active:"Ativo",inactive:"Inativo",terminated:"Desligado"};
+const reportStatus: Record<string, string> = {
+  completed: "Jornada cumprida",
+  debit: "Saldo em débito",
+  open: "Em andamento",
+  absent: "Ausente",
+  no_record: "Sem registro",
+  excused: "Ausência justificada",
+};
+const occurrenceStatus: Record<string, string> = {
+  pending: "Pendente",
+  approved: "Aprovada",
+  rejected: "Rejeitada",
+};
+const employeeStatus: Record<string, string> = {
+  active: "Ativo",
+  inactive: "Inativo",
+  terminated: "Desligado",
+};
 
-function Reports({ctx}:{ctx:Context}){
-  const timezone=ctx.organization.timezone||"America/Sao_Paulo";
-  const today=dateKeyInZone(new Date(),timezone);
-  const initial:ReportFilters={kind:"summary",start:today,end:today,employeeId:"all"};
-  const[filters,setFilters]=useState<ReportFilters>(initial);const[applied,setApplied]=useState<ReportFilters>(initial);
-  const[people,setPeople]=useState<any[]>([]);const[dailyRows,setDailyRows]=useState<any[]>([]);const[entries,setEntries]=useState<any[]>([]);const[justifications,setJustifications]=useState<any[]>([]);
-  const[loading,setLoading]=useState(true);const[error,setError]=useState("");const[updatedAt,setUpdatedAt]=useState<Date|null>(null);
-  const[page,setPage]=useState(1);const[exportOpen,setExportOpen]=useState(false);const[exporting,setExporting]=useState(false);const[wizardOpen,setWizardOpen]=useState(false);const[wizardStep,setWizardStep]=useState(1);const[wizard,setWizard]=useState<ReportFilters>(initial);const[wizardScope,setWizardScope]=useState<"all"|"employee">("all");const[recordEmployee,setRecordEmployee]=useState<any|null>(null);
+function Reports({ ctx }: { ctx: Context }) {
+  const timezone = ctx.organization.timezone || "America/Sao_Paulo";
+  const today = dateKeyInZone(new Date(), timezone);
+  const initial: ReportFilters = {
+    kind: "summary",
+    start: today,
+    end: today,
+    employeeId: "all",
+  };
+  const [filters, setFilters] = useState<ReportFilters>(initial);
+  const [applied, setApplied] = useState<ReportFilters>(initial);
+  const [people, setPeople] = useState<any[]>([]);
+  const [dailyRows, setDailyRows] = useState<any[]>([]);
+  const [entries, setEntries] = useState<any[]>([]);
+  const [justifications, setJustifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [page, setPage] = useState(1);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [wizard, setWizard] = useState<ReportFilters>(initial);
+  const [wizardScope, setWizardScope] = useState<"all" | "employee">("all");
+  const [recordEmployee, setRecordEmployee] = useState<any | null>(null);
 
-  const load=useCallback(async()=>{
-    setLoading(true);setError("");setPage(1);
-    try{
-      const dates=dateKeysBetween(applied.start,applied.end);
-      if(!applied.start||!applied.end||applied.start>applied.end)throw new Error("Informe um período válido: a data inicial deve vir antes da data final.");
-      if(dates.length>366)throw new Error("Para manter o relatório rápido, selecione no máximo 366 dias por emissão.");
-      let employeesQuery=supabase.from("employees").select("id,full_name,employee_code,username,cpf,email,phone,birth_date,gender,job_title,cbo_code,cbo_title,hired_at,terminated_at,termination_reason,status,department_id,overtime_mode,overtime_policy_id,departments(name),work_schedules(name,schedule_type,daily_minutes,weekly_minutes,days_of_week,start_time,end_time,break_start,break_end),overtime_policies(name)").eq("organization_id",ctx.organization.id).order("full_name");
-      if(ctx.member.role==="manager"&&ctx.member.department_id)employeesQuery=employeesQuery.eq("department_id",ctx.member.department_id);
-      const employeesData=await fetchSupabaseRows(employeesQuery);const scopedPeople:any[]=employeesData.filter((person:any)=>applied.employeeId==="all"||person.id===applied.employeeId);
-      let summaryQuery=supabase.from("daily_time_summary").select("*").eq("organization_id",ctx.organization.id).gte("work_date",applied.start).lte("work_date",applied.end).order("work_date",{ascending:false});
-      if(applied.employeeId!=="all")summaryQuery=summaryQuery.eq("employee_id",applied.employeeId);
-      let occurrenceQuery=supabase.from("justifications").select("id,employee_id,kind,reason,starts_at,ends_at,status,review_note,employees(full_name)").eq("organization_id",ctx.organization.id).lte("starts_at",`${shiftDateKey(applied.end,1)}T23:59:59.999Z`).gte("ends_at",`${shiftDateKey(applied.start,-1)}T00:00:00.000Z`).order("starts_at",{ascending:false});
-      if(applied.employeeId!=="all")occurrenceQuery=occurrenceQuery.eq("employee_id",applied.employeeId);
-      let entryQuery=supabase.from("time_entries").select("id,employee_id,event_type,method,occurred_at,received_at,status,notes,employees(full_name,employee_code)").eq("organization_id",ctx.organization.id).gte("occurred_at",`${shiftDateKey(applied.start,-1)}T00:00:00.000Z`).lte("occurred_at",`${shiftDateKey(applied.end,1)}T23:59:59.999Z`).order("occurred_at",{ascending:false});
-      if(applied.employeeId!=="all")entryQuery=entryQuery.eq("employee_id",applied.employeeId);
-      let overtimeQuery=supabase.from("overtime_daily_summary").select("*").eq("organization_id",ctx.organization.id).gte("work_date",applied.start).lte("work_date",applied.end).order("work_date",{ascending:false});
-      if(applied.employeeId!=="all")overtimeQuery=overtimeQuery.eq("employee_id",applied.employeeId);
-      const[summaryData,occurrenceData,holidayData,entryData,overtimeData]=await Promise.all([
-        fetchSupabaseRows(summaryQuery),fetchSupabaseRows(occurrenceQuery),fetchSupabaseRows(supabase.from("holidays").select("holiday_date,applies_to_department_id").eq("organization_id",ctx.organization.id).gte("holiday_date",applied.start).lte("holiday_date",applied.end)),fetchSupabaseRows(entryQuery),fetchSupabaseRows(overtimeQuery),
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    setPage(1);
+    try {
+      const dates = dateKeysBetween(applied.start, applied.end);
+      if (!applied.start || !applied.end || applied.start > applied.end)
+        throw new Error(
+          "Informe um período válido: a data inicial deve vir antes da data final.",
+        );
+      if (dates.length > 366)
+        throw new Error(
+          "Para manter o relatório rápido, selecione no máximo 366 dias por emissão.",
+        );
+      let employeesQuery = supabase
+        .from("employees")
+        .select(
+          "id,full_name,employee_code,username,cpf,email,phone,birth_date,gender,job_title,cbo_code,cbo_title,hired_at,terminated_at,termination_reason,status,department_id,overtime_mode,overtime_policy_id,departments(name),work_schedules(name,schedule_type,daily_minutes,weekly_minutes,days_of_week,start_time,end_time,break_start,break_end),overtime_policies(name)",
+        )
+        .eq("organization_id", ctx.organization.id)
+        .order("full_name");
+      if (ctx.member.role === "manager" && ctx.member.department_id)
+        employeesQuery = employeesQuery.eq(
+          "department_id",
+          ctx.member.department_id,
+        );
+      const employeesData = await fetchSupabaseRows(employeesQuery);
+      const scopedPeople: any[] = employeesData.filter(
+        (person: any) =>
+          applied.employeeId === "all" || person.id === applied.employeeId,
+      );
+      let summaryQuery = supabase
+        .from("daily_time_summary")
+        .select("*")
+        .eq("organization_id", ctx.organization.id)
+        .gte("work_date", applied.start)
+        .lte("work_date", applied.end)
+        .order("work_date", { ascending: false });
+      if (applied.employeeId !== "all")
+        summaryQuery = summaryQuery.eq("employee_id", applied.employeeId);
+      let occurrenceQuery = supabase
+        .from("justifications")
+        .select(
+          "id,employee_id,kind,reason,starts_at,ends_at,status,review_note,employees(full_name)",
+        )
+        .eq("organization_id", ctx.organization.id)
+        .lte("starts_at", `${shiftDateKey(applied.end, 1)}T23:59:59.999Z`)
+        .gte("ends_at", `${shiftDateKey(applied.start, -1)}T00:00:00.000Z`)
+        .order("starts_at", { ascending: false });
+      if (applied.employeeId !== "all")
+        occurrenceQuery = occurrenceQuery.eq("employee_id", applied.employeeId);
+      let entryQuery = supabase
+        .from("time_entries")
+        .select(
+          "id,employee_id,event_type,method,occurred_at,received_at,status,notes,employees(full_name,employee_code)",
+        )
+        .eq("organization_id", ctx.organization.id)
+        .gte("occurred_at", `${shiftDateKey(applied.start, -1)}T00:00:00.000Z`)
+        .lte("occurred_at", `${shiftDateKey(applied.end, 1)}T23:59:59.999Z`)
+        .order("occurred_at", { ascending: false });
+      if (applied.employeeId !== "all")
+        entryQuery = entryQuery.eq("employee_id", applied.employeeId);
+      let overtimeQuery = supabase
+        .from("overtime_daily_summary")
+        .select("*")
+        .eq("organization_id", ctx.organization.id)
+        .gte("work_date", applied.start)
+        .lte("work_date", applied.end)
+        .order("work_date", { ascending: false });
+      if (applied.employeeId !== "all")
+        overtimeQuery = overtimeQuery.eq("employee_id", applied.employeeId);
+      const [
+        summaryData,
+        occurrenceData,
+        holidayData,
+        entryData,
+        overtimeData,
+      ] = await Promise.all([
+        fetchSupabaseRows(summaryQuery),
+        fetchSupabaseRows(occurrenceQuery),
+        fetchSupabaseRows(
+          supabase
+            .from("holidays")
+            .select("holiday_date,applies_to_department_id")
+            .eq("organization_id", ctx.organization.id)
+            .gte("holiday_date", applied.start)
+            .lte("holiday_date", applied.end),
+        ),
+        fetchSupabaseRows(entryQuery),
+        fetchSupabaseRows(overtimeQuery),
       ]);
-      const occurrences=occurrenceData.filter((item:any)=>{const start=dateKeyInZone(item.starts_at,timezone);const end=dateKeyInZone(item.ends_at,timezone);return start<=applied.end&&end>=applied.start});
-      const entriesByDay=new Map<string,any[]>();for(const entry of entryData){const key=`${entry.employee_id}|${dateKeyInZone(entry.occurred_at,timezone)}`;entriesByDay.set(key,[...(entriesByDay.get(key)??[]),entry])}
-      const rawByDay=new Map(summaryData.map((row:any)=>[`${row.employee_id}|${row.work_date}`,row]));const overtimeByDay=new Map(overtimeData.map((row:any)=>[`${row.employee_id}|${row.work_date}`,row]));const holidays=holidayData;const assembled:any[]=[];
-      for(const person of scopedPeople){
-        const schedule=relationOne(person.work_schedules);const department=relationOne(person.departments);const weekdays:number[]=schedule?.days_of_week??[1,2,3,4,5];
-        for(const workDate of dates){
-          const jsDay=new Date(`${workDate}T12:00:00Z`).getUTCDay();const isoDay=jsDay===0?7:jsDay;const hired=person.hired_at?person.hired_at<=workDate:true;const employed=person.terminated_at?person.terminated_at.slice(0,10)>=workDate:person.status!=="terminated";const activeOnDate=hired&&employed&&person.status!=="inactive";const isHoliday=holidays.some((holiday:any)=>holiday.holiday_date===workDate&&(!holiday.applies_to_department_id||holiday.applies_to_department_id===person.department_id));
-          const raw=rawByDay.get(`${person.id}|${workDate}`) as any;const scheduled=activeOnDate&&weekdays.includes(isoDay)&&!isHoliday;if((workDate>today&&!raw)||(!scheduled&&!raw))continue;
-          const dayOccurrences=occurrences.filter((item:any)=>item.employee_id===person.id&&dateKeyInZone(item.starts_at,timezone)<=workDate&&dateKeyInZone(item.ends_at,timezone)>=workDate);const approved=dayOccurrences.some((item:any)=>item.status==="approved");const hasEntry=Number(raw?.event_count??0)>0;const target=scheduled?Number(schedule?.daily_minutes??raw?.target_minutes??480):0;let status=raw?.day_status??(workDate===today?"no_record":"absent");if(!hasEntry&&approved)status="excused";
-          const overtime=overtimeByDay.get(`${person.id}|${workDate}`) as any;const dayEntries=entriesByDay.get(`${person.id}|${workDate}`)??[];const eventAt=(type:string)=>dayEntries.find((entry:any)=>entry.event_type===type)?.occurred_at??null;
-          assembled.push({...raw,employee_id:person.id,full_name:person.full_name,employee_code:person.employee_code,work_date:workDate,department_name:department?.name??"Sem setor",schedule_name:schedule?.name??"Jornada padrão",schedule_type:schedule?.schedule_type??raw?.schedule_type??"fixed",entry_at:eventAt("entry")??raw?.first_entry??null,break_start_at:eventAt("break_start"),break_end_at:eventAt("break_end"),exit_at:eventAt("exit")??raw?.last_exit??null,worked_minutes:Number(raw?.worked_minutes??0),target_minutes:target,balance_minutes:hasEntry?Number(raw?.worked_minutes??0)-target:-target,event_count:Number(raw?.event_count??0),day_status:status,occurrence_count:dayOccurrences.length,overtime_percent:Number(overtime?.overtime_percent??0),overtime_rule:overtime?.overtime_rule??"Sem adicional",overtime_50_minutes:Number(overtime?.overtime_50_minutes??0),overtime_100_minutes:Number(overtime?.overtime_100_minutes??0),bank_delta_minutes:Number(overtime?.bank_delta_minutes??0),payable_overtime_minutes:Number(overtime?.payable_overtime_minutes??0),overtime_mode:overtime?.overtime_mode??person.overtime_mode??"bank",overtime_policy_name:overtime?.overtime_policy_name??relationOne(person.overtime_policies)?.name??"Regra padrão"});
+      const occurrences = occurrenceData.filter((item: any) => {
+        const start = dateKeyInZone(item.starts_at, timezone);
+        const end = dateKeyInZone(item.ends_at, timezone);
+        return start <= applied.end && end >= applied.start;
+      });
+      const entriesByDay = new Map<string, any[]>();
+      for (const entry of entryData) {
+        const key = `${entry.employee_id}|${dateKeyInZone(entry.occurred_at, timezone)}`;
+        entriesByDay.set(key, [...(entriesByDay.get(key) ?? []), entry]);
+      }
+      const rawByDay = new Map(
+        summaryData.map((row: any) => [
+          `${row.employee_id}|${row.work_date}`,
+          row,
+        ]),
+      );
+      const overtimeByDay = new Map(
+        overtimeData.map((row: any) => [
+          `${row.employee_id}|${row.work_date}`,
+          row,
+        ]),
+      );
+      const holidays = holidayData;
+      const assembled: any[] = [];
+      for (const person of scopedPeople) {
+        const schedule = relationOne(person.work_schedules);
+        const department = relationOne(person.departments);
+        const weekdays: number[] = schedule?.days_of_week ?? [1, 2, 3, 4, 5];
+        for (const workDate of dates) {
+          const jsDay = new Date(`${workDate}T12:00:00Z`).getUTCDay();
+          const isoDay = jsDay === 0 ? 7 : jsDay;
+          const hired = person.hired_at ? person.hired_at <= workDate : true;
+          const employed = person.terminated_at
+            ? person.terminated_at.slice(0, 10) >= workDate
+            : person.status !== "terminated";
+          const activeOnDate =
+            hired && employed && person.status !== "inactive";
+          const isHoliday = holidays.some(
+            (holiday: any) =>
+              holiday.holiday_date === workDate &&
+              (!holiday.applies_to_department_id ||
+                holiday.applies_to_department_id === person.department_id),
+          );
+          const raw = rawByDay.get(`${person.id}|${workDate}`) as any;
+          const scheduled =
+            activeOnDate && weekdays.includes(isoDay) && !isHoliday;
+          if ((workDate > today && !raw) || (!scheduled && !raw)) continue;
+          const dayOccurrences = occurrences.filter(
+            (item: any) =>
+              item.employee_id === person.id &&
+              dateKeyInZone(item.starts_at, timezone) <= workDate &&
+              dateKeyInZone(item.ends_at, timezone) >= workDate,
+          );
+          const approved = dayOccurrences.some(
+            (item: any) => item.status === "approved",
+          );
+          const hasEntry = Number(raw?.event_count ?? 0) > 0;
+          const target = scheduled
+            ? Number(schedule?.daily_minutes ?? raw?.target_minutes ?? 480)
+            : 0;
+          let status =
+            raw?.day_status ?? (workDate === today ? "no_record" : "absent");
+          if (!hasEntry && approved) status = "excused";
+          const overtime = overtimeByDay.get(`${person.id}|${workDate}`) as any;
+          const dayEntries = entriesByDay.get(`${person.id}|${workDate}`) ?? [];
+          const eventAt = (type: string) =>
+            dayEntries.find((entry: any) => entry.event_type === type)
+              ?.occurred_at ?? null;
+          assembled.push({
+            ...raw,
+            employee_id: person.id,
+            full_name: person.full_name,
+            employee_code: person.employee_code,
+            work_date: workDate,
+            department_name: department?.name ?? "Sem setor",
+            schedule_name: schedule?.name ?? "Jornada padrão",
+            schedule_type:
+              schedule?.schedule_type ?? raw?.schedule_type ?? "fixed",
+            entry_at: eventAt("entry") ?? raw?.first_entry ?? null,
+            break_start_at: eventAt("break_start"),
+            break_end_at: eventAt("break_end"),
+            exit_at: eventAt("exit") ?? raw?.last_exit ?? null,
+            worked_minutes: Number(raw?.worked_minutes ?? 0),
+            target_minutes: target,
+            balance_minutes: hasEntry
+              ? Number(raw?.worked_minutes ?? 0) - target
+              : -target,
+            event_count: Number(raw?.event_count ?? 0),
+            day_status: status,
+            occurrence_count: dayOccurrences.length,
+            overtime_percent: Number(overtime?.overtime_percent ?? 0),
+            overtime_rule: overtime?.overtime_rule ?? "Sem adicional",
+            overtime_50_minutes: Number(overtime?.overtime_50_minutes ?? 0),
+            overtime_100_minutes: Number(overtime?.overtime_100_minutes ?? 0),
+            bank_delta_minutes: Number(overtime?.bank_delta_minutes ?? 0),
+            payable_overtime_minutes: Number(
+              overtime?.payable_overtime_minutes ?? 0,
+            ),
+            overtime_mode:
+              overtime?.overtime_mode ?? person.overtime_mode ?? "bank",
+            overtime_policy_name:
+              overtime?.overtime_policy_name ??
+              relationOne(person.overtime_policies)?.name ??
+              "Regra padrão",
+          });
         }
       }
-      assembled.sort((a,b)=>b.work_date.localeCompare(a.work_date)||a.full_name.localeCompare(b.full_name));setPeople(employeesData);setDailyRows(assembled);setJustifications(occurrences);setEntries(entryData.filter((entry:any)=>{const date=dateKeyInZone(entry.occurred_at,timezone);return date>=applied.start&&date<=applied.end}));setUpdatedAt(new Date());
-    }catch(reason){setError(reason instanceof Error?reason.message:"Não foi possível montar o relatório.");setPeople([]);setDailyRows([]);setEntries([]);setJustifications([])}finally{setLoading(false)}
-  },[applied,ctx.member.department_id,ctx.member.role,ctx.organization.id,today,timezone]);
-  useEffect(()=>{load()},[load]);
+      assembled.sort(
+        (a, b) =>
+          b.work_date.localeCompare(a.work_date) ||
+          a.full_name.localeCompare(b.full_name),
+      );
+      setPeople(employeesData);
+      setDailyRows(assembled);
+      setJustifications(occurrences);
+      setEntries(
+        entryData.filter((entry: any) => {
+          const date = dateKeyInZone(entry.occurred_at, timezone);
+          return date >= applied.start && date <= applied.end;
+        }),
+      );
+      setUpdatedAt(new Date());
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível montar o relatório.",
+      );
+      setPeople([]);
+      setDailyRows([]);
+      setEntries([]);
+      setJustifications([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    applied,
+    ctx.member.department_id,
+    ctx.member.role,
+    ctx.organization.id,
+    today,
+    timezone,
+  ]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const summaryRows=useMemo(()=>{const grouped=new Map<string,any>();for(const row of dailyRows){const current=grouped.get(row.employee_id)??{employee_id:row.employee_id,full_name:row.full_name,employee_code:row.employee_code,days:0,presences:0,absences:0,worked_minutes:0,target_minutes:0,balance_minutes:0,overtime_50_minutes:0,overtime_100_minutes:0,bank_delta_minutes:0,payable_overtime_minutes:0,occurrences:justifications.filter(item=>item.employee_id===row.employee_id).length};current.days++;current.presences+=row.event_count>0?1:0;current.absences+=row.event_count===0?1:0;current.worked_minutes+=row.worked_minutes;current.target_minutes+=row.target_minutes;current.balance_minutes+=row.balance_minutes;current.overtime_50_minutes+=row.overtime_50_minutes;current.overtime_100_minutes+=row.overtime_100_minutes;current.bank_delta_minutes+=row.bank_delta_minutes;current.payable_overtime_minutes+=row.payable_overtime_minutes;grouped.set(row.employee_id,current)}return Array.from(grouped.values()).sort((a,b)=>a.full_name.localeCompare(b.full_name))},[dailyRows,justifications]);
-  const employeeRows=useMemo(()=>people.filter(person=>applied.employeeId==="all"||person.id===applied.employeeId),[people,applied.employeeId]);
-  const reportRows=useMemo(()=>applied.kind==="summary"?summaryRows:["daily","general","monthly"].includes(applied.kind)?dailyRows:applied.kind==="presence"?dailyRows.filter(row=>row.event_count>0):applied.kind==="absence"?dailyRows.filter(row=>row.event_count===0):applied.kind==="entries"?entries:applied.kind==="overtime"?dailyRows.filter(row=>row.overtime_50_minutes||row.overtime_100_minutes||row.payable_overtime_minutes):applied.kind==="time_bank"?dailyRows.filter(row=>row.bank_delta_minutes!==0):applied.kind==="occurrences"?justifications:employeeRows,[applied.kind,dailyRows,employeeRows,entries,justifications,summaryRows]);
-  const columns=useMemo<ReportColumn[]>(()=>{
-    if(applied.kind==="summary")return[{label:"Funcionário",value:r=><span className="report-person"><b>{r.full_name}</b><small>{r.employee_code}</small></span>,text:r=>r.full_name},{label:"Dias previstos",value:r=>r.days,text:r=>String(r.days)},{label:"Presenças",value:r=>r.presences,text:r=>String(r.presences)},{label:"Faltas",value:r=>r.absences,text:r=>String(r.absences)},{label:"Trabalhado",value:r=>minutes(r.worked_minutes),text:r=>minutes(r.worked_minutes)},{label:"Previsto",value:r=>minutes(r.target_minutes),text:r=>minutes(r.target_minutes)},{label:"Saldo",value:r=><Badge color={r.balance_minutes>=0?"green":"amber"}>{minutes(r.balance_minutes)}</Badge>,text:r=>minutes(r.balance_minutes)},{label:"Extra 50%",value:r=>minutes(r.overtime_50_minutes),text:r=>minutes(r.overtime_50_minutes)},{label:"Extra 100%",value:r=>minutes(r.overtime_100_minutes),text:r=>minutes(r.overtime_100_minutes)},{label:"Banco",value:r=><Badge color={r.bank_delta_minutes>=0?"green":"amber"}>{minutes(r.bank_delta_minutes)}</Badge>,text:r=>minutes(r.bank_delta_minutes)},{label:"Ocorrências",value:r=>r.occurrences,text:r=>String(r.occurrences)}];
-    if(applied.kind==="overtime")return[{label:"Funcionário",value:r=><span className="report-person"><b>{r.full_name}</b><small>{r.employee_code}</small></span>,text:r=>r.full_name},{label:"Data",value:r=>dateLabel(r.work_date),text:r=>dateLabel(r.work_date)},{label:"Regra",value:r=><span className="report-person"><b>{r.overtime_percent}%</b><small>{r.overtime_rule}</small></span>,text:r=>`${r.overtime_percent}% · ${r.overtime_rule}`},{label:"Destino",value:r=>overtimeModeLabels[r.overtime_mode]??r.overtime_mode,text:r=>overtimeModeLabels[r.overtime_mode]??r.overtime_mode},{label:"Trabalhado",value:r=>minutes(r.worked_minutes),text:r=>minutes(r.worked_minutes)},{label:"Meta",value:r=>minutes(r.target_minutes),text:r=>minutes(r.target_minutes)},{label:"Extra 50%",value:r=>minutes(r.overtime_50_minutes),text:r=>minutes(r.overtime_50_minutes)},{label:"Extra 100%",value:r=>minutes(r.overtime_100_minutes),text:r=>minutes(r.overtime_100_minutes)},{label:"Movimento banco",value:r=><Badge color={r.bank_delta_minutes>=0?"green":"amber"}>{minutes(r.bank_delta_minutes)}</Badge>,text:r=>minutes(r.bank_delta_minutes)},{label:"Horas a pagar",value:r=>minutes(r.payable_overtime_minutes),text:r=>minutes(r.payable_overtime_minutes)}];
-    if(applied.kind==="time_bank")return[{label:"Funcionário",value:r=><span className="report-person"><b>{r.full_name}</b><small>{r.employee_code}</small></span>,text:r=>r.full_name},{label:"Data",value:r=>dateLabel(r.work_date),text:r=>dateLabel(r.work_date)},{label:"Trabalhado",value:r=>minutes(r.worked_minutes),text:r=>minutes(r.worked_minutes)},{label:"Previsto",value:r=>minutes(r.target_minutes),text:r=>minutes(r.target_minutes)},{label:"Saldo do dia",value:r=><Badge color={r.balance_minutes>=0?"green":"amber"}>{minutes(r.balance_minutes)}</Badge>,text:r=>minutes(r.balance_minutes)},{label:"Movimento no banco",value:r=><Badge color={r.bank_delta_minutes>=0?"green":"amber"}>{minutes(r.bank_delta_minutes)}</Badge>,text:r=>minutes(r.bank_delta_minutes)},{label:"Regra",value:r=>r.overtime_policy_name,text:r=>r.overtime_policy_name},{label:"Situação",value:r=>reportStatus[r.day_status]??r.day_status,text:r=>reportStatus[r.day_status]??r.day_status}];
-    if(applied.kind==="entries")return[{label:"Funcionário",value:r=>relationOne(r.employees)?.full_name??"—",text:r=>relationOne(r.employees)?.full_name??"—"},{label:"Matrícula",value:r=>relationOne(r.employees)?.employee_code??"—",text:r=>relationOne(r.employees)?.employee_code??"—"},{label:"Data e hora",value:r=>dateTime(r.occurred_at),text:r=>dateTime(r.occurred_at)},{label:"Registro",value:r=>eventLabels[r.event_type]??r.event_type,text:r=>eventLabels[r.event_type]??r.event_type},{label:"Método",value:r=>methodLabels[r.method]??r.method,text:r=>methodLabels[r.method]??r.method},{label:"Situação",value:r=><Badge color={r.status==="valid"?"green":"amber"}>{r.status==="valid"?"Válido":r.status}</Badge>,text:r=>r.status==="valid"?"Válido":r.status},{label:"Observação",value:r=>r.notes??"—",text:r=>r.notes??"—"}];
-    if(applied.kind==="occurrences")return[{label:"Funcionário",value:r=>relationOne(r.employees)?.full_name??"—",text:r=>relationOne(r.employees)?.full_name??"—"},{label:"Tipo",value:r=>r.kind,text:r=>r.kind},{label:"Motivo",value:r=>r.reason,text:r=>r.reason},{label:"Início",value:r=>dateTime(r.starts_at),text:r=>dateTime(r.starts_at)},{label:"Fim",value:r=>dateTime(r.ends_at),text:r=>dateTime(r.ends_at)},{label:"Situação",value:r=><Badge color={r.status==="approved"?"green":r.status==="rejected"?"amber":"gray"}>{occurrenceStatus[r.status]??r.status}</Badge>,text:r=>occurrenceStatus[r.status]??r.status},{label:"Análise do RH",value:r=>r.review_note??"—",text:r=>r.review_note??"—"}];
-    if(applied.kind==="employee_record")return[{label:"Funcionário",value:r=><span className="report-person"><b>{r.full_name}</b><small>{r.employee_code}</small></span>,text:r=>r.full_name},{label:"CPF",value:r=>r.cpf||"Não informado",text:r=>r.cpf||""},{label:"Cargo",value:r=>r.job_title||"—",text:r=>r.job_title||""},{label:"CBO",value:r=>r.cbo_code?formatCbo(r.cbo_code):"—",text:r=>r.cbo_code?formatCbo(r.cbo_code):""},{label:"Setor",value:r=>relationOne(r.departments)?.name||"Sem setor",text:r=>relationOne(r.departments)?.name||"Sem setor"},{label:"Admissão",value:r=>dateLabel(r.hired_at),text:r=>dateLabel(r.hired_at)},{label:"Ação",value:r=><Button size="sm" onClick={()=>setRecordEmployee(r)}><FileText/>Abrir ficha</Button>,text:()=>"Abrir ficha"}];
-    if(applied.kind==="employees")return[{label:"Funcionário",value:r=><span className="report-person"><b>{r.full_name}</b><small>@{r.username}</small></span>,text:r=>r.full_name},{label:"Matrícula",value:r=>r.employee_code,text:r=>r.employee_code},{label:"CPF",value:r=>r.cpf??"—",text:r=>r.cpf??"—"},{label:"Setor",value:r=>relationOne(r.departments)?.name??"Sem setor",text:r=>relationOne(r.departments)?.name??"Sem setor"},{label:"Cargo",value:r=>r.job_title??"—",text:r=>r.job_title??"—"},{label:"CBO",value:r=>r.cbo_code?<span className="report-person"><b>{formatCbo(r.cbo_code)}</b><small>{r.cbo_title??"Título não informado"}</small></span>:"—",text:r=>r.cbo_code?`${formatCbo(r.cbo_code)} · ${r.cbo_title??""}`:"—"},{label:"Admissão",value:r=>dateLabel(r.hired_at),text:r=>dateLabel(r.hired_at)},{label:"Situação",value:r=><Badge color={r.status==="active"?"green":r.status==="terminated"?"amber":"gray"}>{employeeStatus[r.status]??r.status}</Badge>,text:r=>employeeStatus[r.status]??r.status},{label:"Observação",value:r=>r.termination_reason??"—",text:r=>r.termination_reason??"—"}];
-    return[{label:"Funcionário",value:r=><span className="report-person"><b>{r.full_name}</b><small>{r.employee_code}</small></span>,text:r=>r.full_name},{label:"Data",value:r=>dateLabel(r.work_date),text:r=>dateLabel(r.work_date)},{label:"Setor",value:r=>r.department_name,text:r=>r.department_name},{label:"Entrada",value:r=>timeLabel(r.entry_at),text:r=>timeLabel(r.entry_at)},{label:"Início intervalo",value:r=>timeLabel(r.break_start_at),text:r=>timeLabel(r.break_start_at)},{label:"Fim intervalo",value:r=>timeLabel(r.break_end_at),text:r=>timeLabel(r.break_end_at)},{label:"Saída",value:r=>timeLabel(r.exit_at),text:r=>timeLabel(r.exit_at)},{label:"Trabalhado",value:r=>minutes(r.worked_minutes),text:r=>minutes(r.worked_minutes)},{label:"Previsto",value:r=>minutes(r.target_minutes),text:r=>minutes(r.target_minutes)},{label:"Saldo",value:r=><Badge color={r.balance_minutes>=0?"green":"amber"}>{minutes(r.balance_minutes)}</Badge>,text:r=>minutes(r.balance_minutes)},{label:"Extra 50%",value:r=>minutes(r.overtime_50_minutes),text:r=>minutes(r.overtime_50_minutes)},{label:"Extra 100%",value:r=>minutes(r.overtime_100_minutes),text:r=>minutes(r.overtime_100_minutes)},{label:"Banco",value:r=>minutes(r.bank_delta_minutes),text:r=>minutes(r.bank_delta_minutes)},{label:"Situação",value:r=><Badge color={r.day_status==="completed"?"green":r.day_status==="open"?"blue":r.day_status==="excused"?"gray":"amber"}>{reportStatus[r.day_status]??r.day_status}</Badge>,text:r=>reportStatus[r.day_status]??r.day_status},{label:"Ocorrências",value:r=>r.occurrence_count||"—",text:r=>String(r.occurrence_count||0)}];
-  },[applied.kind]);
-  const currentDefinition=reportKinds.find(item=>item.id===applied.kind)!;const ReportIcon=currentDefinition.icon;const pageSize=50;const pageCount=Math.max(1,Math.ceil(reportRows.length/pageSize));const paginated=reportRows.slice((page-1)*pageSize,page*pageSize);const totalBalance=dailyRows.reduce((total,row)=>total+row.balance_minutes,0);const totalExtra50=dailyRows.reduce((total,row)=>total+row.overtime_50_minutes,0);const totalExtra100=dailyRows.reduce((total,row)=>total+row.overtime_100_minutes,0);const totalBankMovement=dailyRows.reduce((total,row)=>total+row.bank_delta_minutes,0);const totalPayable=dailyRows.reduce((total,row)=>total+row.payable_overtime_minutes,0);const presences=dailyRows.filter(row=>row.event_count>0).length;const absences=dailyRows.filter(row=>row.event_count===0).length;const pending=justifications.filter(item=>item.status==="pending").length;
-  function beginWizard(kind?:ReportKind){const selected=kind??filters.kind;const forceEmployee=["employee_record","monthly"].includes(selected);const month=monthBounds(today.slice(0,7));const next={...filters,kind:selected,start:selected==="daily"?today:selected==="monthly"?month.start:filters.start,end:selected==="daily"?today:selected==="monthly"?month.end:filters.end,employeeId:forceEmployee?(filters.employeeId==="all"?"":filters.employeeId):filters.employeeId};setWizard(next);setWizardScope(forceEmployee?"employee":next.employeeId==="all"?"all":"employee");setWizardStep(kind?2:1);setWizardOpen(true)}
-  function wizardPreset(preset:"today"|"yesterday"|"week"|"month"|"previous_month"){const yesterday=shiftDateKey(today,-1);const previous=monthBounds(shiftDateKey(today.slice(0,8)+"01",-1).slice(0,7));setWizard(current=>({...current,start:preset==="today"?today:preset==="yesterday"?yesterday:preset==="week"?shiftDateKey(today,-6):preset==="previous_month"?previous.start:today.slice(0,8)+"01",end:preset==="yesterday"?yesterday:preset==="previous_month"?previous.end:today}))}
-  function finishWizard(){if(wizardScope==="employee"&&!wizard.employeeId){setError("Selecione o funcionário para continuar.");setWizardStep(3);return}const next={...wizard,employeeId:wizardScope==="all"?"all":wizard.employeeId};setFilters(next);setApplied(next);setWizardOpen(false);setError("");if(next.kind==="employee_record"){const selected=people.find(person=>person.id===next.employeeId);if(selected)setRecordEmployee(selected)}}
-  const safeName=(currentDefinition.title+"-"+ctx.organization.trade_name).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]+/g,"-").replace(/^-|-$/g,"").toLowerCase();const exportData=()=>reportRows.map(row=>Object.fromEntries(columns.map(column=>[column.label,column.text(row)])));
-  async function exportExcel(){
-    const complete=true;
-    setExporting(true);
-    try{
-      const writeExcelFile=(await import("write-excel-file/browser")).default;const header=(labels:string[])=>labels.map(value=>({value,fontWeight:"bold",backgroundColor:"#0D3558",textColor:"#FFFFFF",align:"center",height:26}));
-      const tableSheet=(sheet:string,labels:string[],rows:string[][])=>({sheet,data:[header(labels),...rows.map(row=>row.map(value=>({value:String(value??""),wrap:true,verticalAlign:"center"})))],columns:labels.map(label=>({width:Math.min(38,Math.max(14,label.length+6))})),stickyRowsCount:1});
-      const info={sheet:"Informações",data:[[{value:"PontoNorte",fontWeight:"bold",fontSize:15,textColor:"#0D3558"},complete?"Pacote completo de controle de ponto":currentDefinition.title],["Empresa",ctx.organization.trade_name],["Período",["employees","employee_record"].includes(applied.kind)?"Cadastro atual":`${dateLabel(applied.start)} a ${dateLabel(applied.end)}`],["Colaborador",applied.employeeId==="all"?"Todos":employeeRows[0]?.full_name??"Selecionado"],["Gerado em",dateTime(new Date().toISOString())],["Atualização","Os dados são montados a partir das batidas salvas no PontoNorte."]],columns:[{width:19},{width:55}]};
-      const dailyLabels=["Funcionário","Matrícula","Data","Setor","Entrada","Início intervalo","Fim intervalo","Saída","Trabalhado","Previsto","Saldo","Extra 50%","Extra 100%","Banco","Situação","Ocorrências"];
-      const dailyData=(rows:any[])=>rows.map(row=>[row.full_name,row.employee_code,dateLabel(row.work_date),row.department_name,timeLabel(row.entry_at),timeLabel(row.break_start_at),timeLabel(row.break_end_at),timeLabel(row.exit_at),minutes(row.worked_minutes),minutes(row.target_minutes),minutes(row.balance_minutes),minutes(row.overtime_50_minutes),minutes(row.overtime_100_minutes),minutes(row.bank_delta_minutes),reportStatus[row.day_status]??row.day_status,String(row.occurrence_count||0)]);
-      const occurrenceLabels=["Funcionário","Tipo","Motivo","Início","Fim","Situação","Análise do RH"];
-      let sheets:any[]=[info,tableSheet(currentDefinition.title.slice(0,31),columns.map(column=>column.label),exportData().map(row=>columns.map(column=>String(row[column.label]??""))))];
-      if(complete){
-        const overtimeRows=dailyRows.filter(row=>row.overtime_50_minutes||row.overtime_100_minutes||row.payable_overtime_minutes);const bankRows=dailyRows.filter(row=>row.bank_delta_minutes!==0);
-        sheets=[info,
-          tableSheet("Resumo geral",["Funcionário","Matrícula","Dias previstos","Presenças","Faltas","Trabalhado","Previsto","Saldo","Extra 50%","Extra 100%","Banco","Ocorrências"],summaryRows.map(row=>[row.full_name,row.employee_code,String(row.days),String(row.presences),String(row.absences),minutes(row.worked_minutes),minutes(row.target_minutes),minutes(row.balance_minutes),minutes(row.overtime_50_minutes),minutes(row.overtime_100_minutes),minutes(row.bank_delta_minutes),String(row.occurrences)])),
-          tableSheet("Controle diário",dailyLabels,dailyData(dailyRows)),
-          tableSheet("Presenças",dailyLabels,dailyData(dailyRows.filter(row=>row.event_count>0))),
-          tableSheet("Faltas",dailyLabels,dailyData(dailyRows.filter(row=>row.event_count===0))),
-          tableSheet("Registros de ponto",["Funcionário","Matrícula","Data e hora","Registro","Método","Situação","Observação"],entries.map(row=>[relationOne(row.employees)?.full_name??"—",relationOne(row.employees)?.employee_code??"—",dateTime(row.occurred_at),eventLabels[row.event_type]??row.event_type,methodLabels[row.method]??row.method,row.status==="valid"?"Válido":row.status,row.notes??""])),
-          tableSheet("Horas extras",["Funcionário","Matrícula","Data","Regra","Destino","Trabalhado","Previsto","Extra 50%","Extra 100%","Horas a pagar"],overtimeRows.map(row=>[row.full_name,row.employee_code,dateLabel(row.work_date),`${row.overtime_percent}% · ${row.overtime_rule}`,overtimeModeLabels[row.overtime_mode]??row.overtime_mode,minutes(row.worked_minutes),minutes(row.target_minutes),minutes(row.overtime_50_minutes),minutes(row.overtime_100_minutes),minutes(row.payable_overtime_minutes)])),
-          tableSheet("Banco de horas",["Funcionário","Matrícula","Data","Trabalhado","Previsto","Saldo do dia","Movimento no banco","Regra"],bankRows.map(row=>[row.full_name,row.employee_code,dateLabel(row.work_date),minutes(row.worked_minutes),minutes(row.target_minutes),minutes(row.balance_minutes),minutes(row.bank_delta_minutes),row.overtime_policy_name])),
-          tableSheet("Funcionários",["Funcionário","Matrícula","CPF","Setor","Cargo","CBO","Admissão","Situação","Observação"],employeeRows.map(row=>[row.full_name,row.employee_code,row.cpf??"",relationOne(row.departments)?.name??"Sem setor",row.job_title??"",row.cbo_code?`${formatCbo(row.cbo_code)} · ${row.cbo_title??""}`:"",dateLabel(row.hired_at),employeeStatus[row.status]??row.status,row.termination_reason??""])),
-          tableSheet("Ocorrências",occurrenceLabels,justifications.map(item=>[relationOne(item.employees)?.full_name??"—",item.kind,item.reason,dateTime(item.starts_at),dateTime(item.ends_at),occurrenceStatus[item.status]??item.status,item.review_note??""])),
-        ];
-      }else if(justifications.length&&applied.kind!=="occurrences")sheets.push(tableSheet("Ocorrências",occurrenceLabels,justifications.map(item=>[relationOne(item.employees)?.full_name??"—",item.kind,item.reason,dateTime(item.starts_at),dateTime(item.ends_at),occurrenceStatus[item.status]??item.status,item.review_note??""])));
-      const fileName=complete?`pontonorte-pacote-completo-${applied.start}-${applied.end}.xlsx`:`${safeName}-${applied.start}-${applied.end}.xlsx`;await writeExcelFile(sheets,{fontFamily:"Arial",fontSize:10}).toFile(fileName);setExportOpen(false);
-    }catch{setError("Não foi possível gerar a planilha. Tente novamente.")}finally{setExporting(false)}
+  const summaryRows = useMemo(() => {
+    const grouped = new Map<string, any>();
+    for (const row of dailyRows) {
+      const current = grouped.get(row.employee_id) ?? {
+        employee_id: row.employee_id,
+        full_name: row.full_name,
+        employee_code: row.employee_code,
+        days: 0,
+        presences: 0,
+        absences: 0,
+        worked_minutes: 0,
+        target_minutes: 0,
+        balance_minutes: 0,
+        overtime_50_minutes: 0,
+        overtime_100_minutes: 0,
+        bank_delta_minutes: 0,
+        payable_overtime_minutes: 0,
+        occurrences: justifications.filter(
+          (item) => item.employee_id === row.employee_id,
+        ).length,
+      };
+      current.days++;
+      current.presences += row.event_count > 0 ? 1 : 0;
+      current.absences += row.event_count === 0 ? 1 : 0;
+      current.worked_minutes += row.worked_minutes;
+      current.target_minutes += row.target_minutes;
+      current.balance_minutes += row.balance_minutes;
+      current.overtime_50_minutes += row.overtime_50_minutes;
+      current.overtime_100_minutes += row.overtime_100_minutes;
+      current.bank_delta_minutes += row.bank_delta_minutes;
+      current.payable_overtime_minutes += row.payable_overtime_minutes;
+      grouped.set(row.employee_id, current);
+    }
+    return Array.from(grouped.values()).sort((a, b) =>
+      a.full_name.localeCompare(b.full_name),
+    );
+  }, [dailyRows, justifications]);
+  const employeeRows = useMemo(
+    () =>
+      people.filter(
+        (person) =>
+          applied.employeeId === "all" || person.id === applied.employeeId,
+      ),
+    [people, applied.employeeId],
+  );
+  const reportRows = useMemo(
+    () =>
+      applied.kind === "summary"
+        ? summaryRows
+        : ["daily", "general", "monthly"].includes(applied.kind)
+          ? dailyRows
+          : applied.kind === "presence"
+            ? dailyRows.filter((row) => row.event_count > 0)
+            : applied.kind === "absence"
+              ? dailyRows.filter((row) => row.event_count === 0)
+              : applied.kind === "entries"
+                ? entries
+                : applied.kind === "overtime"
+                  ? dailyRows.filter(
+                      (row) =>
+                        row.overtime_50_minutes ||
+                        row.overtime_100_minutes ||
+                        row.payable_overtime_minutes,
+                    )
+                  : applied.kind === "time_bank"
+                    ? dailyRows.filter((row) => row.bank_delta_minutes !== 0)
+                    : applied.kind === "occurrences"
+                      ? justifications
+                      : employeeRows,
+    [
+      applied.kind,
+      dailyRows,
+      employeeRows,
+      entries,
+      justifications,
+      summaryRows,
+    ],
+  );
+  const columns = useMemo<ReportColumn[]>(() => {
+    if (applied.kind === "summary")
+      return [
+        {
+          label: "Funcionário",
+          value: (r) => (
+            <span className="report-person">
+              <b>{r.full_name}</b>
+              <small>{r.employee_code}</small>
+            </span>
+          ),
+          text: (r) => r.full_name,
+        },
+        {
+          label: "Dias previstos",
+          value: (r) => r.days,
+          text: (r) => String(r.days),
+        },
+        {
+          label: "Presenças",
+          value: (r) => r.presences,
+          text: (r) => String(r.presences),
+        },
+        {
+          label: "Faltas",
+          value: (r) => r.absences,
+          text: (r) => String(r.absences),
+        },
+        {
+          label: "Trabalhado",
+          value: (r) => minutes(r.worked_minutes),
+          text: (r) => minutes(r.worked_minutes),
+        },
+        {
+          label: "Previsto",
+          value: (r) => minutes(r.target_minutes),
+          text: (r) => minutes(r.target_minutes),
+        },
+        {
+          label: "Saldo",
+          value: (r) => (
+            <Badge color={r.balance_minutes >= 0 ? "green" : "amber"}>
+              {minutes(r.balance_minutes)}
+            </Badge>
+          ),
+          text: (r) => minutes(r.balance_minutes),
+        },
+        {
+          label: "Extra 50%",
+          value: (r) => minutes(r.overtime_50_minutes),
+          text: (r) => minutes(r.overtime_50_minutes),
+        },
+        {
+          label: "Extra 100%",
+          value: (r) => minutes(r.overtime_100_minutes),
+          text: (r) => minutes(r.overtime_100_minutes),
+        },
+        {
+          label: "Banco",
+          value: (r) => (
+            <Badge color={r.bank_delta_minutes >= 0 ? "green" : "amber"}>
+              {minutes(r.bank_delta_minutes)}
+            </Badge>
+          ),
+          text: (r) => minutes(r.bank_delta_minutes),
+        },
+        {
+          label: "Ocorrências",
+          value: (r) => r.occurrences,
+          text: (r) => String(r.occurrences),
+        },
+      ];
+    if (applied.kind === "overtime")
+      return [
+        {
+          label: "Funcionário",
+          value: (r) => (
+            <span className="report-person">
+              <b>{r.full_name}</b>
+              <small>{r.employee_code}</small>
+            </span>
+          ),
+          text: (r) => r.full_name,
+        },
+        {
+          label: "Data",
+          value: (r) => dateLabel(r.work_date),
+          text: (r) => dateLabel(r.work_date),
+        },
+        {
+          label: "Regra",
+          value: (r) => (
+            <span className="report-person">
+              <b>{r.overtime_percent}%</b>
+              <small>{r.overtime_rule}</small>
+            </span>
+          ),
+          text: (r) => `${r.overtime_percent}% · ${r.overtime_rule}`,
+        },
+        {
+          label: "Destino",
+          value: (r) => overtimeModeLabels[r.overtime_mode] ?? r.overtime_mode,
+          text: (r) => overtimeModeLabels[r.overtime_mode] ?? r.overtime_mode,
+        },
+        {
+          label: "Trabalhado",
+          value: (r) => minutes(r.worked_minutes),
+          text: (r) => minutes(r.worked_minutes),
+        },
+        {
+          label: "Meta",
+          value: (r) => minutes(r.target_minutes),
+          text: (r) => minutes(r.target_minutes),
+        },
+        {
+          label: "Extra 50%",
+          value: (r) => minutes(r.overtime_50_minutes),
+          text: (r) => minutes(r.overtime_50_minutes),
+        },
+        {
+          label: "Extra 100%",
+          value: (r) => minutes(r.overtime_100_minutes),
+          text: (r) => minutes(r.overtime_100_minutes),
+        },
+        {
+          label: "Movimento banco",
+          value: (r) => (
+            <Badge color={r.bank_delta_minutes >= 0 ? "green" : "amber"}>
+              {minutes(r.bank_delta_minutes)}
+            </Badge>
+          ),
+          text: (r) => minutes(r.bank_delta_minutes),
+        },
+        {
+          label: "Horas a pagar",
+          value: (r) => minutes(r.payable_overtime_minutes),
+          text: (r) => minutes(r.payable_overtime_minutes),
+        },
+      ];
+    if (applied.kind === "time_bank")
+      return [
+        {
+          label: "Funcionário",
+          value: (r) => (
+            <span className="report-person">
+              <b>{r.full_name}</b>
+              <small>{r.employee_code}</small>
+            </span>
+          ),
+          text: (r) => r.full_name,
+        },
+        {
+          label: "Data",
+          value: (r) => dateLabel(r.work_date),
+          text: (r) => dateLabel(r.work_date),
+        },
+        {
+          label: "Trabalhado",
+          value: (r) => minutes(r.worked_minutes),
+          text: (r) => minutes(r.worked_minutes),
+        },
+        {
+          label: "Previsto",
+          value: (r) => minutes(r.target_minutes),
+          text: (r) => minutes(r.target_minutes),
+        },
+        {
+          label: "Saldo do dia",
+          value: (r) => (
+            <Badge color={r.balance_minutes >= 0 ? "green" : "amber"}>
+              {minutes(r.balance_minutes)}
+            </Badge>
+          ),
+          text: (r) => minutes(r.balance_minutes),
+        },
+        {
+          label: "Movimento no banco",
+          value: (r) => (
+            <Badge color={r.bank_delta_minutes >= 0 ? "green" : "amber"}>
+              {minutes(r.bank_delta_minutes)}
+            </Badge>
+          ),
+          text: (r) => minutes(r.bank_delta_minutes),
+        },
+        {
+          label: "Regra",
+          value: (r) => r.overtime_policy_name,
+          text: (r) => r.overtime_policy_name,
+        },
+        {
+          label: "Situação",
+          value: (r) => reportStatus[r.day_status] ?? r.day_status,
+          text: (r) => reportStatus[r.day_status] ?? r.day_status,
+        },
+      ];
+    if (applied.kind === "entries")
+      return [
+        {
+          label: "Funcionário",
+          value: (r) => relationOne(r.employees)?.full_name ?? "—",
+          text: (r) => relationOne(r.employees)?.full_name ?? "—",
+        },
+        {
+          label: "Matrícula",
+          value: (r) => relationOne(r.employees)?.employee_code ?? "—",
+          text: (r) => relationOne(r.employees)?.employee_code ?? "—",
+        },
+        {
+          label: "Data e hora",
+          value: (r) => dateTime(r.occurred_at),
+          text: (r) => dateTime(r.occurred_at),
+        },
+        {
+          label: "Registro",
+          value: (r) => eventLabels[r.event_type] ?? r.event_type,
+          text: (r) => eventLabels[r.event_type] ?? r.event_type,
+        },
+        {
+          label: "Método",
+          value: (r) => methodLabels[r.method] ?? r.method,
+          text: (r) => methodLabels[r.method] ?? r.method,
+        },
+        {
+          label: "Situação",
+          value: (r) => (
+            <Badge color={r.status === "valid" ? "green" : "amber"}>
+              {r.status === "valid" ? "Válido" : r.status}
+            </Badge>
+          ),
+          text: (r) => (r.status === "valid" ? "Válido" : r.status),
+        },
+        {
+          label: "Observação",
+          value: (r) => r.notes ?? "—",
+          text: (r) => r.notes ?? "—",
+        },
+      ];
+    if (applied.kind === "occurrences")
+      return [
+        {
+          label: "Funcionário",
+          value: (r) => relationOne(r.employees)?.full_name ?? "—",
+          text: (r) => relationOne(r.employees)?.full_name ?? "—",
+        },
+        { label: "Tipo", value: (r) => r.kind, text: (r) => r.kind },
+        { label: "Motivo", value: (r) => r.reason, text: (r) => r.reason },
+        {
+          label: "Início",
+          value: (r) => dateTime(r.starts_at),
+          text: (r) => dateTime(r.starts_at),
+        },
+        {
+          label: "Fim",
+          value: (r) => dateTime(r.ends_at),
+          text: (r) => dateTime(r.ends_at),
+        },
+        {
+          label: "Situação",
+          value: (r) => (
+            <Badge
+              color={
+                r.status === "approved"
+                  ? "green"
+                  : r.status === "rejected"
+                    ? "amber"
+                    : "gray"
+              }
+            >
+              {occurrenceStatus[r.status] ?? r.status}
+            </Badge>
+          ),
+          text: (r) => occurrenceStatus[r.status] ?? r.status,
+        },
+        {
+          label: "Análise do RH",
+          value: (r) => r.review_note ?? "—",
+          text: (r) => r.review_note ?? "—",
+        },
+      ];
+    if (applied.kind === "employee_record")
+      return [
+        {
+          label: "Funcionário",
+          value: (r) => (
+            <span className="report-person">
+              <b>{r.full_name}</b>
+              <small>{r.employee_code}</small>
+            </span>
+          ),
+          text: (r) => r.full_name,
+        },
+        {
+          label: "CPF",
+          value: (r) => r.cpf || "Não informado",
+          text: (r) => r.cpf || "",
+        },
+        {
+          label: "Cargo",
+          value: (r) => r.job_title || "—",
+          text: (r) => r.job_title || "",
+        },
+        {
+          label: "CBO",
+          value: (r) => (r.cbo_code ? formatCbo(r.cbo_code) : "—"),
+          text: (r) => (r.cbo_code ? formatCbo(r.cbo_code) : ""),
+        },
+        {
+          label: "Setor",
+          value: (r) => relationOne(r.departments)?.name || "Sem setor",
+          text: (r) => relationOne(r.departments)?.name || "Sem setor",
+        },
+        {
+          label: "Admissão",
+          value: (r) => dateLabel(r.hired_at),
+          text: (r) => dateLabel(r.hired_at),
+        },
+        {
+          label: "Ação",
+          value: (r) => (
+            <Button size="sm" onClick={() => setRecordEmployee(r)}>
+              <FileText />
+              Abrir ficha
+            </Button>
+          ),
+          text: () => "Abrir ficha",
+        },
+      ];
+    if (applied.kind === "employees")
+      return [
+        {
+          label: "Funcionário",
+          value: (r) => (
+            <span className="report-person">
+              <b>{r.full_name}</b>
+              <small>@{r.username}</small>
+            </span>
+          ),
+          text: (r) => r.full_name,
+        },
+        {
+          label: "Matrícula",
+          value: (r) => r.employee_code,
+          text: (r) => r.employee_code,
+        },
+        { label: "CPF", value: (r) => r.cpf ?? "—", text: (r) => r.cpf ?? "—" },
+        {
+          label: "Setor",
+          value: (r) => relationOne(r.departments)?.name ?? "Sem setor",
+          text: (r) => relationOne(r.departments)?.name ?? "Sem setor",
+        },
+        {
+          label: "Cargo",
+          value: (r) => r.job_title ?? "—",
+          text: (r) => r.job_title ?? "—",
+        },
+        {
+          label: "CBO",
+          value: (r) =>
+            r.cbo_code ? (
+              <span className="report-person">
+                <b>{formatCbo(r.cbo_code)}</b>
+                <small>{r.cbo_title ?? "Título não informado"}</small>
+              </span>
+            ) : (
+              "—"
+            ),
+          text: (r) =>
+            r.cbo_code
+              ? `${formatCbo(r.cbo_code)} · ${r.cbo_title ?? ""}`
+              : "—",
+        },
+        {
+          label: "Admissão",
+          value: (r) => dateLabel(r.hired_at),
+          text: (r) => dateLabel(r.hired_at),
+        },
+        {
+          label: "Situação",
+          value: (r) => (
+            <Badge
+              color={
+                r.status === "active"
+                  ? "green"
+                  : r.status === "terminated"
+                    ? "amber"
+                    : "gray"
+              }
+            >
+              {employeeStatus[r.status] ?? r.status}
+            </Badge>
+          ),
+          text: (r) => employeeStatus[r.status] ?? r.status,
+        },
+        {
+          label: "Observação",
+          value: (r) => r.termination_reason ?? "—",
+          text: (r) => r.termination_reason ?? "—",
+        },
+      ];
+    return [
+      {
+        label: "Funcionário",
+        value: (r) => (
+          <span className="report-person">
+            <b>{r.full_name}</b>
+            <small>{r.employee_code}</small>
+          </span>
+        ),
+        text: (r) => r.full_name,
+      },
+      {
+        label: "Data",
+        value: (r) => dateLabel(r.work_date),
+        text: (r) => dateLabel(r.work_date),
+      },
+      {
+        label: "Setor",
+        value: (r) => r.department_name,
+        text: (r) => r.department_name,
+      },
+      {
+        label: "Entrada",
+        value: (r) => timeLabel(r.entry_at),
+        text: (r) => timeLabel(r.entry_at),
+      },
+      {
+        label: "Início intervalo",
+        value: (r) => timeLabel(r.break_start_at),
+        text: (r) => timeLabel(r.break_start_at),
+      },
+      {
+        label: "Fim intervalo",
+        value: (r) => timeLabel(r.break_end_at),
+        text: (r) => timeLabel(r.break_end_at),
+      },
+      {
+        label: "Saída",
+        value: (r) => timeLabel(r.exit_at),
+        text: (r) => timeLabel(r.exit_at),
+      },
+      {
+        label: "Trabalhado",
+        value: (r) => minutes(r.worked_minutes),
+        text: (r) => minutes(r.worked_minutes),
+      },
+      {
+        label: "Previsto",
+        value: (r) => minutes(r.target_minutes),
+        text: (r) => minutes(r.target_minutes),
+      },
+      {
+        label: "Saldo",
+        value: (r) => (
+          <Badge color={r.balance_minutes >= 0 ? "green" : "amber"}>
+            {minutes(r.balance_minutes)}
+          </Badge>
+        ),
+        text: (r) => minutes(r.balance_minutes),
+      },
+      {
+        label: "Extra 50%",
+        value: (r) => minutes(r.overtime_50_minutes),
+        text: (r) => minutes(r.overtime_50_minutes),
+      },
+      {
+        label: "Extra 100%",
+        value: (r) => minutes(r.overtime_100_minutes),
+        text: (r) => minutes(r.overtime_100_minutes),
+      },
+      {
+        label: "Banco",
+        value: (r) => minutes(r.bank_delta_minutes),
+        text: (r) => minutes(r.bank_delta_minutes),
+      },
+      {
+        label: "Situação",
+        value: (r) => (
+          <Badge
+            color={
+              r.day_status === "completed"
+                ? "green"
+                : r.day_status === "open"
+                  ? "blue"
+                  : r.day_status === "excused"
+                    ? "gray"
+                    : "amber"
+            }
+          >
+            {reportStatus[r.day_status] ?? r.day_status}
+          </Badge>
+        ),
+        text: (r) => reportStatus[r.day_status] ?? r.day_status,
+      },
+      {
+        label: "Ocorrências",
+        value: (r) => r.occurrence_count || "—",
+        text: (r) => String(r.occurrence_count || 0),
+      },
+    ];
+  }, [applied.kind]);
+  const currentDefinition = reportKinds.find(
+    (item) => item.id === applied.kind,
+  )!;
+  const ReportIcon = currentDefinition.icon;
+  const pageSize = 50;
+  const pageCount = Math.max(1, Math.ceil(reportRows.length / pageSize));
+  const paginated = reportRows.slice((page - 1) * pageSize, page * pageSize);
+  const totalBalance = dailyRows.reduce(
+    (total, row) => total + row.balance_minutes,
+    0,
+  );
+  const totalExtra50 = dailyRows.reduce(
+    (total, row) => total + row.overtime_50_minutes,
+    0,
+  );
+  const totalExtra100 = dailyRows.reduce(
+    (total, row) => total + row.overtime_100_minutes,
+    0,
+  );
+  const totalBankMovement = dailyRows.reduce(
+    (total, row) => total + row.bank_delta_minutes,
+    0,
+  );
+  const totalPayable = dailyRows.reduce(
+    (total, row) => total + row.payable_overtime_minutes,
+    0,
+  );
+  const presences = dailyRows.filter((row) => row.event_count > 0).length;
+  const absences = dailyRows.filter((row) => row.event_count === 0).length;
+  const pending = justifications.filter(
+    (item) => item.status === "pending",
+  ).length;
+  function beginWizard(kind?: ReportKind) {
+    const selected = kind ?? filters.kind;
+    const forceEmployee = ["employee_record", "monthly"].includes(selected);
+    const month = monthBounds(today.slice(0, 7));
+    const next = {
+      ...filters,
+      kind: selected,
+      start:
+        selected === "daily"
+          ? today
+          : selected === "monthly"
+            ? month.start
+            : filters.start,
+      end:
+        selected === "daily"
+          ? today
+          : selected === "monthly"
+            ? month.end
+            : filters.end,
+      employeeId: forceEmployee
+        ? filters.employeeId === "all"
+          ? ""
+          : filters.employeeId
+        : filters.employeeId,
+    };
+    setWizard(next);
+    setWizardScope(
+      forceEmployee
+        ? "employee"
+        : next.employeeId === "all"
+          ? "all"
+          : "employee",
+    );
+    setWizardStep(kind ? 2 : 1);
+    setWizardOpen(true);
   }
-  async function exportPdf(){setExporting(true);try{const[{jsPDF},{default:autoTable}]=await Promise.all([import("jspdf"),import("jspdf-autotable")]);const landscape=columns.length>6;const doc=new jsPDF({orientation:landscape?"landscape":"portrait",unit:"mm",format:"a4"});doc.setTextColor(13,53,88);doc.setFontSize(17);doc.text("PontoNorte",14,16);doc.setTextColor(31,47,61);doc.setFontSize(13);doc.text(currentDefinition.title,14,24);doc.setTextColor(92,108,120);doc.setFontSize(9);doc.text(`${ctx.organization.trade_name} · ${["employees","employee_record"].includes(applied.kind)?"Cadastro atual":`${dateLabel(applied.start)} a ${dateLabel(applied.end)}`} · ${applied.employeeId==="all"?"Todos os colaboradores":employeeRows[0]?.full_name??"Colaborador"}`,14,31);autoTable(doc,{startY:37,head:[columns.map(column=>column.label)],body:reportRows.map(row=>columns.map(column=>column.text(row))),styles:{fontSize:7,cellPadding:2,overflow:"linebreak"},headStyles:{fillColor:[13,53,88],textColor:255},alternateRowStyles:{fillColor:[245,248,250]},margin:{left:10,right:10}});if(justifications.length){doc.addPage("a4",landscape?"landscape":"portrait");doc.setTextColor(31,47,61);doc.setFontSize(13);doc.text("Ocorrências do período",14,16);autoTable(doc,{startY:22,head:[["Funcionário","Tipo","Período","Situação","Motivo"]],body:justifications.map(item=>[relationOne(item.employees)?.full_name??"—",item.kind,`${dateTime(item.starts_at)} a ${dateTime(item.ends_at)}`,occurrenceStatus[item.status]??item.status,item.reason]),styles:{fontSize:8,cellPadding:2},headStyles:{fillColor:[13,53,88],textColor:255},margin:{left:10,right:10}})}const pages=doc.getNumberOfPages();for(let index=1;index<=pages;index++){doc.setPage(index);doc.setTextColor(120);doc.setFontSize(8);doc.text(`Gerado em ${dateTime(new Date().toISOString())} · Página ${index} de ${pages}`,14,doc.internal.pageSize.height-7)}doc.save(`${safeName}-${applied.start}-${applied.end}.pdf`);setExportOpen(false)}catch{setError("Não foi possível gerar o PDF. Tente novamente.")}finally{setExporting(false)}}
-  return <><PageHead title="Relatórios" desc="Escolha o relatório em um fluxo guiado e gere somente o que o RH precisa." action={<div className="report-head-actions"><Button variant="outline" onClick={()=>beginWizard()}><Filter/>Nova consulta</Button>{applied.kind==="employee_record"?<Button disabled={applied.employeeId==="all"||!employeeRows[0]} onClick={()=>setRecordEmployee(employeeRows[0])}><FileText/>Abrir ficha</Button>:<Button disabled={loading||reportRows.length===0} onClick={()=>setExportOpen(true)}><Download/>Emitir relatório</Button>}</div>}/><section className="surface report-selector"><header><div><h2>Qual relatório você precisa?</h2><p>Escolha uma visão. Você poderá emitir a mesma consulta em Excel ou PDF.</p></div></header><div>{reportKinds.map(({id,title,description,icon:Icon})=><button key={id} className={applied.kind===id?"active":""} onClick={()=>beginWizard(id)}><Icon/><span><b>{title}</b><small>{description}</small></span>{applied.kind===id&&<Check/>}</button>)}</div></section><section className="surface report-current-query"><div><span><Filter/></span><p><small>CONSULTA ATUAL</small><b>{currentDefinition.title}</b></p></div><dl><div><dt>Escopo</dt><dd>{applied.employeeId==="all"?"Todos os colaboradores":employeeRows[0]?.full_name||"Funcionário selecionado"}</dd></div><div><dt>Período</dt><dd>{["employees","employee_record"].includes(applied.kind)?"Cadastro atual":`${dateLabel(applied.start)} a ${dateLabel(applied.end)}`}</dd></div></dl><Button variant="outline" onClick={()=>beginWizard(applied.kind)}><Pencil/>Alterar consulta</Button></section><ErrorBox message={error}/><section className="metrics report-metrics">{[[employeeRows.filter(person=>person.status==="active").length,"Colaboradores ativos"],[presences,"Presenças no período"],[absences,"Faltas / sem registro"],[pending,"Ocorrências pendentes"]].map((metric,index)=><article key={String(metric[1])}><span className={"metric-mark m"+index}/><div><b>{metric[0]}</b><p>{metric[1]}</p>{index===2&&<small>Saldo geral: {minutes(totalBalance)}</small>}</div></article>)}</section><section className="surface overtime-report-strip"><header><History/><div><h2>Horas extras no período</h2><p>Separação automática conforme a regra aplicada a cada dia e funcionário.</p></div></header><div><article><small>Extra 50%</small><b>{minutes(totalExtra50)}</b></article><article><small>Extra 100%</small><b>{minutes(totalExtra100)}</b></article><article><small>Movimento no banco</small><b className={totalBankMovement>=0?"positive-balance":"negative-balance"}>{minutes(totalBankMovement)}</b></article><article><small>Horas para pagamento</small><b>{minutes(totalPayable)}</b></article></div></section><section className="surface table-surface report-preview"><header className="report-preview-head"><div><span className="report-icon"><ReportIcon/></span><span><h2>{currentDefinition.title}</h2><p>{applied.kind==="employee_record"?`${reportRows.length} ficha selecionada`:applied.kind==="employees"?`${reportRows.length} colaboradores cadastrados`:`${dateLabel(applied.start)} a ${dateLabel(applied.end)} · ${reportRows.length} registros`}</p></span></div><aside>{updatedAt&&<small>Atualizado às {new Intl.DateTimeFormat("pt-BR",{timeStyle:"short"}).format(updatedAt)}</small>}<Button variant="outline" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading?"spin":""}/>Atualizar</Button></aside></header><div className="report-table-scroll"><Table><TableHeader><TableRow>{columns.map(column=><TableHead key={column.label}>{column.label}</TableHead>)}</TableRow></TableHeader><TableBody>{loading?<TableRow><TableCell colSpan={columns.length}><div className="report-loading"><RefreshCw className="spin"/>Montando o relatório…</div></TableCell></TableRow>:paginated.length?paginated.map((row,index)=><TableRow key={row.id??`${row.employee_id}-${row.work_date??index}`} className={row.event_count===0&&applied.kind!=="summary"?"absence-row":""}>{columns.map(column=><TableCell key={column.label}>{column.value(row)}</TableCell>)}</TableRow>):<TableRow><TableCell colSpan={columns.length}><div className="report-empty"><FileText/><b>Nenhum dado encontrado</b><p>Revise o período ou selecione outro colaborador.</p></div></TableCell></TableRow>}</TableBody></Table></div>{!loading&&reportRows.length>0&&<footer className="report-pagination"><span>Mostrando {(page-1)*pageSize+1}–{Math.min(page*pageSize,reportRows.length)} de {reportRows.length}</span><div><button disabled={page===1} onClick={()=>setPage(current=>Math.max(1,current-1))}><ChevronLeft/>Anterior</button><b>{page} de {pageCount}</b><button disabled={page===pageCount} onClick={()=>setPage(current=>Math.min(pageCount,current+1))}>Próxima<ChevronRight/></button></div></footer>}</section><Dialog open={wizardOpen} onOpenChange={setWizardOpen}><DialogContent className="report-wizard-dialog"><DialogHeader><DialogTitle>Montar relatório</DialogTitle><DialogDescription>Responda às etapas abaixo. O PontoNorte prepara a consulta para você.</DialogDescription></DialogHeader><div className="report-wizard-progress"><span style={{width:(wizardStep/4*100)+"%"}}/></div><div className="report-wizard-step-label"><small>ETAPA {wizardStep} DE 4</small><b>{wizardStep===1?"Escolha o relatório":wizardStep===2?"Defina o escopo":wizardStep===3?"Informe os detalhes":"Confira antes de gerar"}</b></div>
-{wizardStep===1&&<div className="report-wizard-kinds">{reportKinds.map(({id,title,description,icon:Icon})=><button type="button" key={id} className={wizard.kind===id?"active":""} onClick={()=>{const individual=["employee_record","monthly"].includes(id);const bounds=id==="monthly"?monthBounds(today.slice(0,7)):null;setWizard(current=>({...current,kind:id,start:id==="daily"?today:bounds?.start??current.start,end:id==="daily"?today:bounds?.end??current.end,employeeId:individual?"":current.employeeId}));if(individual)setWizardScope("employee")}}><Icon/><span><b>{title}</b><small>{description}</small></span>{wizard.kind===id&&<Check/>}</button>)}</div>}
-{wizardStep===2&&<div className="report-wizard-scope"><button type="button" disabled={["employee_record","monthly"].includes(wizard.kind)} className={wizardScope==="all"?"active":""} onClick={()=>{setWizardScope("all");setWizard(current=>({...current,employeeId:"all"}))}}><UsersRound/><span><b>Relatório geral</b><small>Inclui todos os colaboradores permitidos para o seu acesso.</small></span></button><button type="button" className={wizardScope==="employee"?"active":""} onClick={()=>{setWizardScope("employee");setWizard(current=>({...current,employeeId:current.employeeId==="all"?"":current.employeeId}))}}><UserRound/><span><b>Funcionário específico</b><small>Mostra somente a pessoa escolhida. Obrigatório para ficha e espelho mensal.</small></span></button></div>}
-{wizardStep===3&&<div className="report-wizard-details">{wizardScope==="employee"&&<label>Qual funcionário?<select autoFocus value={wizard.employeeId} onChange={event=>setWizard({...wizard,employeeId:event.target.value})}><option value="">Selecione um funcionário</option>{people.map(person=><option key={person.id} value={person.id}>{person.full_name} · {person.employee_code}</option>)}</select></label>}{wizard.kind==="monthly"?<label>Qual mês?<Input type="month" value={wizard.start.slice(0,7)} onChange={event=>{const bounds=monthBounds(event.target.value);setWizard({...wizard,...bounds})}}/></label>:wizard.kind==="daily"?<label>Qual dia?<Input type="date" value={wizard.start} onChange={event=>setWizard({...wizard,start:event.target.value,end:event.target.value})}/></label>:!["employees","employee_record"].includes(wizard.kind)&&<><div className="period-shortcuts"><button type="button" onClick={()=>wizardPreset("today")}>Hoje</button><button type="button" onClick={()=>wizardPreset("yesterday")}>Ontem</button><button type="button" onClick={()=>wizardPreset("week")}>Últimos 7 dias</button><button type="button" onClick={()=>wizardPreset("month")}>Este mês</button><button type="button" onClick={()=>wizardPreset("previous_month")}>Mês anterior</button></div><div className="report-wizard-dates"><label>Data inicial<Input type="date" value={wizard.start} onChange={event=>setWizard({...wizard,start:event.target.value})}/></label><label>Data final<Input type="date" value={wizard.end} onChange={event=>setWizard({...wizard,end:event.target.value})}/></label></div></>}</div>}
-{wizardStep===4&&<div className="report-wizard-review"><span><Check/></span><h2>Consulta pronta para montar</h2><dl><div><dt>Relatório</dt><dd>{reportKinds.find(item=>item.id===wizard.kind)?.title}</dd></div><div><dt>Escopo</dt><dd>{wizardScope==="all"?"Todos os colaboradores":people.find(person=>person.id===wizard.employeeId)?.full_name||"Não selecionado"}</dd></div><div><dt>Período</dt><dd>{["employees","employee_record"].includes(wizard.kind)?"Cadastro atual":`${dateLabel(wizard.start)} a ${dateLabel(wizard.end)}`}</dd></div><div><dt>Saída</dt><dd>{wizard.kind==="employee_record"?"Ficha preenchida em PDF":"Tabela na tela, resumo em PDF ou pacote completo em Excel"}</dd></div></dl></div>}
-<footer className="report-wizard-actions"><Button type="button" variant="outline" disabled={wizardStep===1} onClick={()=>setWizardStep(step=>Math.max(1,step-1))}><ChevronLeft/>Voltar</Button><small>Você poderá alterar depois.</small>{wizardStep<4?<Button type="button" onClick={()=>{if(wizardStep===3&&wizardScope==="employee"&&!wizard.employeeId){setError("Selecione um funcionário para continuar.");return}setError("");setWizardStep(step=>Math.min(4,step+1))}}>Continuar<ChevronRight/></Button>:<Button type="button" onClick={finishWizard}>{wizard.kind==="employee_record"?"Preencher e gerar ficha":"Montar relatório"}<ChevronRight/></Button>}</footer></DialogContent></Dialog><EmployeeRecordDialog open={!!recordEmployee} onOpenChange={value=>{if(!value)setRecordEmployee(null)}} organization={ctx.organization} employee={recordEmployee} schedule={relationOne(recordEmployee?.work_schedules)} canManage={roleCanManage(ctx.member.role)||ctx.member.role==="manager"}/><Dialog open={exportOpen} onOpenChange={setExportOpen}><DialogContent className="export-dialog"><DialogHeader><DialogTitle>Como deseja receber o relatório?</DialogTitle><DialogDescription>A consulta atual será emitida com os mesmos filtros mostrados na tela.</DialogDescription></DialogHeader><div className="export-options"><button disabled={exporting} onClick={exportExcel}><span className="excel"><FileSpreadsheet/></span><p><b>Pacote completo em Excel</b><small>Arquivo .xlsx com abas de resumo, ponto diário, presenças, faltas, horas extras, banco, funcionários e ocorrências.</small></p><ChevronRight/></button><button disabled={exporting} onClick={exportPdf}><span className="pdf"><FileText/></span><p><b>Resumo em PDF</b><small>Documento pronto para conferir, imprimir ou compartilhar.</small></p><ChevronRight/></button></div>{exporting&&<div className="export-progress"><RefreshCw className="spin"/>Preparando arquivo…</div>}</DialogContent></Dialog></>
+  function wizardPreset(
+    preset: "today" | "yesterday" | "week" | "month" | "previous_month",
+  ) {
+    const yesterday = shiftDateKey(today, -1);
+    const previous = monthBounds(
+      shiftDateKey(today.slice(0, 8) + "01", -1).slice(0, 7),
+    );
+    setWizard((current) => ({
+      ...current,
+      start:
+        preset === "today"
+          ? today
+          : preset === "yesterday"
+            ? yesterday
+            : preset === "week"
+              ? shiftDateKey(today, -6)
+              : preset === "previous_month"
+                ? previous.start
+                : today.slice(0, 8) + "01",
+      end:
+        preset === "yesterday"
+          ? yesterday
+          : preset === "previous_month"
+            ? previous.end
+            : today,
+    }));
+  }
+  function finishWizard() {
+    if (wizardScope === "employee" && !wizard.employeeId) {
+      setError("Selecione o funcionário para continuar.");
+      setWizardStep(3);
+      return;
+    }
+    const next = {
+      ...wizard,
+      employeeId: wizardScope === "all" ? "all" : wizard.employeeId,
+    };
+    setFilters(next);
+    setApplied(next);
+    setWizardOpen(false);
+    setError("");
+    if (next.kind === "employee_record") {
+      const selected = people.find((person) => person.id === next.employeeId);
+      if (selected) setRecordEmployee(selected);
+    }
+  }
+  const safeName = (currentDefinition.title + "-" + ctx.organization.trade_name)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+  const exportData = () =>
+    reportRows.map((row) =>
+      Object.fromEntries(
+        columns.map((column) => [column.label, column.text(row)]),
+      ),
+    );
+  async function exportExcel() {
+    const complete = true;
+    setExporting(true);
+    try {
+      const writeExcelFile = (await import("write-excel-file/browser")).default;
+      const header = (labels: string[]) =>
+        labels.map((value) => ({
+          value,
+          fontWeight: "bold",
+          backgroundColor: "#0D3558",
+          textColor: "#FFFFFF",
+          align: "center",
+          height: 26,
+        }));
+      const tableSheet = (
+        sheet: string,
+        labels: string[],
+        rows: string[][],
+      ) => ({
+        sheet,
+        data: [
+          header(labels),
+          ...rows.map((row) =>
+            row.map((value) => ({
+              value: String(value ?? ""),
+              wrap: true,
+              verticalAlign: "center",
+            })),
+          ),
+        ],
+        columns: labels.map((label) => ({
+          width: Math.min(38, Math.max(14, label.length + 6)),
+        })),
+        stickyRowsCount: 1,
+      });
+      const info = {
+        sheet: "Informações",
+        data: [
+          [
+            {
+              value: "PontoNorte",
+              fontWeight: "bold",
+              fontSize: 15,
+              textColor: "#0D3558",
+            },
+            complete
+              ? "Pacote completo de controle de ponto"
+              : currentDefinition.title,
+          ],
+          ["Empresa", ctx.organization.trade_name],
+          [
+            "Período",
+            ["employees", "employee_record"].includes(applied.kind)
+              ? "Cadastro atual"
+              : `${dateLabel(applied.start)} a ${dateLabel(applied.end)}`,
+          ],
+          [
+            "Colaborador",
+            applied.employeeId === "all"
+              ? "Todos"
+              : (employeeRows[0]?.full_name ?? "Selecionado"),
+          ],
+          ["Gerado em", dateTime(new Date().toISOString())],
+          [
+            "Atualização",
+            "Os dados são montados a partir das batidas salvas no PontoNorte.",
+          ],
+        ],
+        columns: [{ width: 19 }, { width: 55 }],
+      };
+      const dailyLabels = [
+        "Funcionário",
+        "Matrícula",
+        "Data",
+        "Setor",
+        "Entrada",
+        "Início intervalo",
+        "Fim intervalo",
+        "Saída",
+        "Trabalhado",
+        "Previsto",
+        "Saldo",
+        "Extra 50%",
+        "Extra 100%",
+        "Banco",
+        "Situação",
+        "Ocorrências",
+      ];
+      const dailyData = (rows: any[]) =>
+        rows.map((row) => [
+          row.full_name,
+          row.employee_code,
+          dateLabel(row.work_date),
+          row.department_name,
+          timeLabel(row.entry_at),
+          timeLabel(row.break_start_at),
+          timeLabel(row.break_end_at),
+          timeLabel(row.exit_at),
+          minutes(row.worked_minutes),
+          minutes(row.target_minutes),
+          minutes(row.balance_minutes),
+          minutes(row.overtime_50_minutes),
+          minutes(row.overtime_100_minutes),
+          minutes(row.bank_delta_minutes),
+          reportStatus[row.day_status] ?? row.day_status,
+          String(row.occurrence_count || 0),
+        ]);
+      const occurrenceLabels = [
+        "Funcionário",
+        "Tipo",
+        "Motivo",
+        "Início",
+        "Fim",
+        "Situação",
+        "Análise do RH",
+      ];
+      let sheets: any[] = [
+        info,
+        tableSheet(
+          currentDefinition.title.slice(0, 31),
+          columns.map((column) => column.label),
+          exportData().map((row) =>
+            columns.map((column) => String(row[column.label] ?? "")),
+          ),
+        ),
+      ];
+      if (complete) {
+        const overtimeRows = dailyRows.filter(
+          (row) =>
+            row.overtime_50_minutes ||
+            row.overtime_100_minutes ||
+            row.payable_overtime_minutes,
+        );
+        const bankRows = dailyRows.filter(
+          (row) => row.bank_delta_minutes !== 0,
+        );
+        sheets = [
+          info,
+          tableSheet(
+            "Resumo geral",
+            [
+              "Funcionário",
+              "Matrícula",
+              "Dias previstos",
+              "Presenças",
+              "Faltas",
+              "Trabalhado",
+              "Previsto",
+              "Saldo",
+              "Extra 50%",
+              "Extra 100%",
+              "Banco",
+              "Ocorrências",
+            ],
+            summaryRows.map((row) => [
+              row.full_name,
+              row.employee_code,
+              String(row.days),
+              String(row.presences),
+              String(row.absences),
+              minutes(row.worked_minutes),
+              minutes(row.target_minutes),
+              minutes(row.balance_minutes),
+              minutes(row.overtime_50_minutes),
+              minutes(row.overtime_100_minutes),
+              minutes(row.bank_delta_minutes),
+              String(row.occurrences),
+            ]),
+          ),
+          tableSheet("Controle diário", dailyLabels, dailyData(dailyRows)),
+          tableSheet(
+            "Presenças",
+            dailyLabels,
+            dailyData(dailyRows.filter((row) => row.event_count > 0)),
+          ),
+          tableSheet(
+            "Faltas",
+            dailyLabels,
+            dailyData(dailyRows.filter((row) => row.event_count === 0)),
+          ),
+          tableSheet(
+            "Registros de ponto",
+            [
+              "Funcionário",
+              "Matrícula",
+              "Data e hora",
+              "Registro",
+              "Método",
+              "Situação",
+              "Observação",
+            ],
+            entries.map((row) => [
+              relationOne(row.employees)?.full_name ?? "—",
+              relationOne(row.employees)?.employee_code ?? "—",
+              dateTime(row.occurred_at),
+              eventLabels[row.event_type] ?? row.event_type,
+              methodLabels[row.method] ?? row.method,
+              row.status === "valid" ? "Válido" : row.status,
+              row.notes ?? "",
+            ]),
+          ),
+          tableSheet(
+            "Horas extras",
+            [
+              "Funcionário",
+              "Matrícula",
+              "Data",
+              "Regra",
+              "Destino",
+              "Trabalhado",
+              "Previsto",
+              "Extra 50%",
+              "Extra 100%",
+              "Horas a pagar",
+            ],
+            overtimeRows.map((row) => [
+              row.full_name,
+              row.employee_code,
+              dateLabel(row.work_date),
+              `${row.overtime_percent}% · ${row.overtime_rule}`,
+              overtimeModeLabels[row.overtime_mode] ?? row.overtime_mode,
+              minutes(row.worked_minutes),
+              minutes(row.target_minutes),
+              minutes(row.overtime_50_minutes),
+              minutes(row.overtime_100_minutes),
+              minutes(row.payable_overtime_minutes),
+            ]),
+          ),
+          tableSheet(
+            "Banco de horas",
+            [
+              "Funcionário",
+              "Matrícula",
+              "Data",
+              "Trabalhado",
+              "Previsto",
+              "Saldo do dia",
+              "Movimento no banco",
+              "Regra",
+            ],
+            bankRows.map((row) => [
+              row.full_name,
+              row.employee_code,
+              dateLabel(row.work_date),
+              minutes(row.worked_minutes),
+              minutes(row.target_minutes),
+              minutes(row.balance_minutes),
+              minutes(row.bank_delta_minutes),
+              row.overtime_policy_name,
+            ]),
+          ),
+          tableSheet(
+            "Funcionários",
+            [
+              "Funcionário",
+              "Matrícula",
+              "CPF",
+              "Setor",
+              "Cargo",
+              "CBO",
+              "Admissão",
+              "Situação",
+              "Observação",
+            ],
+            employeeRows.map((row) => [
+              row.full_name,
+              row.employee_code,
+              row.cpf ?? "",
+              relationOne(row.departments)?.name ?? "Sem setor",
+              row.job_title ?? "",
+              row.cbo_code
+                ? `${formatCbo(row.cbo_code)} · ${row.cbo_title ?? ""}`
+                : "",
+              dateLabel(row.hired_at),
+              employeeStatus[row.status] ?? row.status,
+              row.termination_reason ?? "",
+            ]),
+          ),
+          tableSheet(
+            "Ocorrências",
+            occurrenceLabels,
+            justifications.map((item) => [
+              relationOne(item.employees)?.full_name ?? "—",
+              item.kind,
+              item.reason,
+              dateTime(item.starts_at),
+              dateTime(item.ends_at),
+              occurrenceStatus[item.status] ?? item.status,
+              item.review_note ?? "",
+            ]),
+          ),
+        ];
+      } else if (justifications.length && applied.kind !== "occurrences")
+        sheets.push(
+          tableSheet(
+            "Ocorrências",
+            occurrenceLabels,
+            justifications.map((item) => [
+              relationOne(item.employees)?.full_name ?? "—",
+              item.kind,
+              item.reason,
+              dateTime(item.starts_at),
+              dateTime(item.ends_at),
+              occurrenceStatus[item.status] ?? item.status,
+              item.review_note ?? "",
+            ]),
+          ),
+        );
+      const fileName = complete
+        ? `pontonorte-pacote-completo-${applied.start}-${applied.end}.xlsx`
+        : `${safeName}-${applied.start}-${applied.end}.xlsx`;
+      await writeExcelFile(sheets, {
+        fontFamily: "Arial",
+        fontSize: 10,
+      }).toFile(fileName);
+      setExportOpen(false);
+    } catch {
+      setError("Não foi possível gerar a planilha. Tente novamente.");
+    } finally {
+      setExporting(false);
+    }
+  }
+  async function exportPdf() {
+    setExporting(true);
+    try {
+      const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
+      const landscape = columns.length > 6;
+      const doc = new jsPDF({
+        orientation: landscape ? "landscape" : "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+      doc.setTextColor(13, 53, 88);
+      doc.setFontSize(17);
+      doc.text("PontoNorte", 14, 16);
+      doc.setTextColor(31, 47, 61);
+      doc.setFontSize(13);
+      doc.text(currentDefinition.title, 14, 24);
+      doc.setTextColor(92, 108, 120);
+      doc.setFontSize(9);
+      doc.text(
+        `${ctx.organization.trade_name} · ${["employees", "employee_record"].includes(applied.kind) ? "Cadastro atual" : `${dateLabel(applied.start)} a ${dateLabel(applied.end)}`} · ${applied.employeeId === "all" ? "Todos os colaboradores" : (employeeRows[0]?.full_name ?? "Colaborador")}`,
+        14,
+        31,
+      );
+      autoTable(doc, {
+        startY: 37,
+        head: [columns.map((column) => column.label)],
+        body: reportRows.map((row) =>
+          columns.map((column) => column.text(row)),
+        ),
+        styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
+        headStyles: { fillColor: [13, 53, 88], textColor: 255 },
+        alternateRowStyles: { fillColor: [245, 248, 250] },
+        margin: { left: 10, right: 10 },
+      });
+      if (justifications.length) {
+        doc.addPage("a4", landscape ? "landscape" : "portrait");
+        doc.setTextColor(31, 47, 61);
+        doc.setFontSize(13);
+        doc.text("Ocorrências do período", 14, 16);
+        autoTable(doc, {
+          startY: 22,
+          head: [["Funcionário", "Tipo", "Período", "Situação", "Motivo"]],
+          body: justifications.map((item) => [
+            relationOne(item.employees)?.full_name ?? "—",
+            item.kind,
+            `${dateTime(item.starts_at)} a ${dateTime(item.ends_at)}`,
+            occurrenceStatus[item.status] ?? item.status,
+            item.reason,
+          ]),
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [13, 53, 88], textColor: 255 },
+          margin: { left: 10, right: 10 },
+        });
+      }
+      const pages = doc.getNumberOfPages();
+      for (let index = 1; index <= pages; index++) {
+        doc.setPage(index);
+        doc.setTextColor(120);
+        doc.setFontSize(8);
+        doc.text(
+          `Gerado em ${dateTime(new Date().toISOString())} · Página ${index} de ${pages}`,
+          14,
+          doc.internal.pageSize.height - 7,
+        );
+      }
+      doc.save(`${safeName}-${applied.start}-${applied.end}.pdf`);
+      setExportOpen(false);
+    } catch {
+      setError("Não foi possível gerar o PDF. Tente novamente.");
+    } finally {
+      setExporting(false);
+    }
+  }
+  return (
+    <>
+      <PageHead
+        title="Relatórios"
+        desc="Escolha o relatório em um fluxo guiado e gere somente o que o RH precisa."
+        action={
+          <div className="report-head-actions">
+            <Button variant="outline" onClick={() => beginWizard()}>
+              <Filter />
+              Nova consulta
+            </Button>
+            {applied.kind === "employee_record" ? (
+              <Button
+                disabled={applied.employeeId === "all" || !employeeRows[0]}
+                onClick={() => setRecordEmployee(employeeRows[0])}
+              >
+                <FileText />
+                Abrir ficha
+              </Button>
+            ) : (
+              <Button
+                disabled={loading || reportRows.length === 0}
+                onClick={() => setExportOpen(true)}
+              >
+                <Download />
+                Emitir relatório
+              </Button>
+            )}
+          </div>
+        }
+      />
+      <section className="surface report-selector">
+        <header>
+          <div>
+            <h2>Qual relatório você precisa?</h2>
+            <p>
+              Escolha uma visão. Você poderá emitir a mesma consulta em Excel ou
+              PDF.
+            </p>
+          </div>
+        </header>
+        <div>
+          {reportKinds.map(({ id, title, description, icon: Icon }) => (
+            <button
+              key={id}
+              className={applied.kind === id ? "active" : ""}
+              onClick={() => beginWizard(id)}
+            >
+              <Icon />
+              <span>
+                <b>{title}</b>
+                <small>{description}</small>
+              </span>
+              {applied.kind === id && <Check />}
+            </button>
+          ))}
+        </div>
+      </section>
+      <section className="surface report-current-query">
+        <div>
+          <span>
+            <Filter />
+          </span>
+          <p>
+            <small>CONSULTA ATUAL</small>
+            <b>{currentDefinition.title}</b>
+          </p>
+        </div>
+        <dl>
+          <div>
+            <dt>Escopo</dt>
+            <dd>
+              {applied.employeeId === "all"
+                ? "Todos os colaboradores"
+                : employeeRows[0]?.full_name || "Funcionário selecionado"}
+            </dd>
+          </div>
+          <div>
+            <dt>Período</dt>
+            <dd>
+              {["employees", "employee_record"].includes(applied.kind)
+                ? "Cadastro atual"
+                : `${dateLabel(applied.start)} a ${dateLabel(applied.end)}`}
+            </dd>
+          </div>
+        </dl>
+        <Button variant="outline" onClick={() => beginWizard(applied.kind)}>
+          <Pencil />
+          Alterar consulta
+        </Button>
+      </section>
+      <ErrorBox message={error} />
+      <section className="metrics report-metrics">
+        {[
+          [
+            employeeRows.filter((person) => person.status === "active").length,
+            "Colaboradores ativos",
+          ],
+          [presences, "Presenças no período"],
+          [absences, "Faltas / sem registro"],
+          [pending, "Ocorrências pendentes"],
+        ].map((metric, index) => (
+          <article key={String(metric[1])}>
+            <span className={"metric-mark m" + index} />
+            <div>
+              <b>{metric[0]}</b>
+              <p>{metric[1]}</p>
+              {index === 2 && (
+                <small>Saldo geral: {minutes(totalBalance)}</small>
+              )}
+            </div>
+          </article>
+        ))}
+      </section>
+      <section className="surface overtime-report-strip">
+        <header>
+          <History />
+          <div>
+            <h2>Horas extras no período</h2>
+            <p>
+              Separação automática conforme a regra aplicada a cada dia e
+              funcionário.
+            </p>
+          </div>
+        </header>
+        <div>
+          <article>
+            <small>Extra 50%</small>
+            <b>{minutes(totalExtra50)}</b>
+          </article>
+          <article>
+            <small>Extra 100%</small>
+            <b>{minutes(totalExtra100)}</b>
+          </article>
+          <article>
+            <small>Movimento no banco</small>
+            <b
+              className={
+                totalBankMovement >= 0 ? "positive-balance" : "negative-balance"
+              }
+            >
+              {minutes(totalBankMovement)}
+            </b>
+          </article>
+          <article>
+            <small>Horas para pagamento</small>
+            <b>{minutes(totalPayable)}</b>
+          </article>
+        </div>
+      </section>
+      <section className="surface table-surface report-preview">
+        <header className="report-preview-head">
+          <div>
+            <span className="report-icon">
+              <ReportIcon />
+            </span>
+            <span>
+              <h2>{currentDefinition.title}</h2>
+              <p>
+                {applied.kind === "employee_record"
+                  ? `${reportRows.length} ficha selecionada`
+                  : applied.kind === "employees"
+                    ? `${reportRows.length} colaboradores cadastrados`
+                    : `${dateLabel(applied.start)} a ${dateLabel(applied.end)} · ${reportRows.length} registros`}
+              </p>
+            </span>
+          </div>
+          <aside>
+            {updatedAt && (
+              <small>
+                Atualizado às{" "}
+                {new Intl.DateTimeFormat("pt-BR", {
+                  timeStyle: "short",
+                }).format(updatedAt)}
+              </small>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={load}
+              disabled={loading}
+            >
+              <RefreshCw className={loading ? "spin" : ""} />
+              Atualizar
+            </Button>
+          </aside>
+        </header>
+        <div className="report-table-scroll">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {columns.map((column) => (
+                  <TableHead key={column.label}>{column.label}</TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length}>
+                    <div className="report-loading">
+                      <RefreshCw className="spin" />
+                      Montando o relatório…
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : paginated.length ? (
+                paginated.map((row, index) => (
+                  <TableRow
+                    key={
+                      row.id ?? `${row.employee_id}-${row.work_date ?? index}`
+                    }
+                    className={
+                      row.event_count === 0 && applied.kind !== "summary"
+                        ? "absence-row"
+                        : ""
+                    }
+                  >
+                    {columns.map((column) => (
+                      <TableCell key={column.label}>
+                        {column.value(row)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={columns.length}>
+                    <div className="report-empty">
+                      <FileText />
+                      <b>Nenhum dado encontrado</b>
+                      <p>Revise o período ou selecione outro colaborador.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        {!loading && reportRows.length > 0 && (
+          <footer className="report-pagination">
+            <span>
+              Mostrando {(page - 1) * pageSize + 1}–
+              {Math.min(page * pageSize, reportRows.length)} de{" "}
+              {reportRows.length}
+            </span>
+            <div>
+              <button
+                disabled={page === 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                <ChevronLeft />
+                Anterior
+              </button>
+              <b>
+                {page} de {pageCount}
+              </b>
+              <button
+                disabled={page === pageCount}
+                onClick={() =>
+                  setPage((current) => Math.min(pageCount, current + 1))
+                }
+              >
+                Próxima
+                <ChevronRight />
+              </button>
+            </div>
+          </footer>
+        )}
+      </section>
+      <Dialog open={wizardOpen} onOpenChange={setWizardOpen}>
+        <DialogContent className="report-wizard-dialog">
+          <DialogHeader>
+            <DialogTitle>Montar relatório</DialogTitle>
+            <DialogDescription>
+              Responda às etapas abaixo. O PontoNorte prepara a consulta para
+              você.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="report-wizard-progress">
+            <span style={{ width: (wizardStep / 4) * 100 + "%" }} />
+          </div>
+          <div className="report-wizard-step-label">
+            <small>ETAPA {wizardStep} DE 4</small>
+            <b>
+              {wizardStep === 1
+                ? "Escolha o relatório"
+                : wizardStep === 2
+                  ? "Defina o escopo"
+                  : wizardStep === 3
+                    ? "Informe os detalhes"
+                    : "Confira antes de gerar"}
+            </b>
+          </div>
+          {wizardStep === 1 && (
+            <div className="report-wizard-kinds">
+              {reportKinds.map(({ id, title, description, icon: Icon }) => (
+                <button
+                  type="button"
+                  key={id}
+                  className={wizard.kind === id ? "active" : ""}
+                  onClick={() => {
+                    const individual = ["employee_record", "monthly"].includes(
+                      id,
+                    );
+                    const bounds =
+                      id === "monthly" ? monthBounds(today.slice(0, 7)) : null;
+                    setWizard((current) => ({
+                      ...current,
+                      kind: id,
+                      start:
+                        id === "daily"
+                          ? today
+                          : (bounds?.start ?? current.start),
+                      end:
+                        id === "daily" ? today : (bounds?.end ?? current.end),
+                      employeeId: individual ? "" : current.employeeId,
+                    }));
+                    if (individual) setWizardScope("employee");
+                  }}
+                >
+                  <Icon />
+                  <span>
+                    <b>{title}</b>
+                    <small>{description}</small>
+                  </span>
+                  {wizard.kind === id && <Check />}
+                </button>
+              ))}
+            </div>
+          )}
+          {wizardStep === 2 && (
+            <div className="report-wizard-scope">
+              <button
+                type="button"
+                disabled={["employee_record", "monthly"].includes(wizard.kind)}
+                className={wizardScope === "all" ? "active" : ""}
+                onClick={() => {
+                  setWizardScope("all");
+                  setWizard((current) => ({ ...current, employeeId: "all" }));
+                }}
+              >
+                <UsersRound />
+                <span>
+                  <b>Relatório geral</b>
+                  <small>
+                    Inclui todos os colaboradores permitidos para o seu acesso.
+                  </small>
+                </span>
+              </button>
+              <button
+                type="button"
+                className={wizardScope === "employee" ? "active" : ""}
+                onClick={() => {
+                  setWizardScope("employee");
+                  setWizard((current) => ({
+                    ...current,
+                    employeeId:
+                      current.employeeId === "all" ? "" : current.employeeId,
+                  }));
+                }}
+              >
+                <UserRound />
+                <span>
+                  <b>Funcionário específico</b>
+                  <small>
+                    Mostra somente a pessoa escolhida. Obrigatório para ficha e
+                    espelho mensal.
+                  </small>
+                </span>
+              </button>
+            </div>
+          )}
+          {wizardStep === 3 && (
+            <div className="report-wizard-details">
+              {wizardScope === "employee" && (
+                <label>
+                  Qual funcionário?
+                  <select
+                    autoFocus
+                    value={wizard.employeeId}
+                    onChange={(event) =>
+                      setWizard({ ...wizard, employeeId: event.target.value })
+                    }
+                  >
+                    <option value="">Selecione um funcionário</option>
+                    {people.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.full_name} · {person.employee_code}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {wizard.kind === "monthly" ? (
+                <label>
+                  Qual mês?
+                  <Input
+                    type="month"
+                    value={wizard.start.slice(0, 7)}
+                    onChange={(event) => {
+                      const bounds = monthBounds(event.target.value);
+                      setWizard({ ...wizard, ...bounds });
+                    }}
+                  />
+                </label>
+              ) : wizard.kind === "daily" ? (
+                <label>
+                  Qual dia?
+                  <Input
+                    type="date"
+                    value={wizard.start}
+                    onChange={(event) =>
+                      setWizard({
+                        ...wizard,
+                        start: event.target.value,
+                        end: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+              ) : (
+                !["employees", "employee_record"].includes(wizard.kind) && (
+                  <>
+                    <div className="period-shortcuts">
+                      <button
+                        type="button"
+                        onClick={() => wizardPreset("today")}
+                      >
+                        Hoje
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => wizardPreset("yesterday")}
+                      >
+                        Ontem
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => wizardPreset("week")}
+                      >
+                        Últimos 7 dias
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => wizardPreset("month")}
+                      >
+                        Este mês
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => wizardPreset("previous_month")}
+                      >
+                        Mês anterior
+                      </button>
+                    </div>
+                    <div className="report-wizard-dates">
+                      <label>
+                        Data inicial
+                        <Input
+                          type="date"
+                          value={wizard.start}
+                          onChange={(event) =>
+                            setWizard({ ...wizard, start: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Data final
+                        <Input
+                          type="date"
+                          value={wizard.end}
+                          onChange={(event) =>
+                            setWizard({ ...wizard, end: event.target.value })
+                          }
+                        />
+                      </label>
+                    </div>
+                  </>
+                )
+              )}
+            </div>
+          )}
+          {wizardStep === 4 && (
+            <div className="report-wizard-review">
+              <span>
+                <Check />
+              </span>
+              <h2>Consulta pronta para montar</h2>
+              <dl>
+                <div>
+                  <dt>Relatório</dt>
+                  <dd>
+                    {reportKinds.find((item) => item.id === wizard.kind)?.title}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Escopo</dt>
+                  <dd>
+                    {wizardScope === "all"
+                      ? "Todos os colaboradores"
+                      : people.find((person) => person.id === wizard.employeeId)
+                          ?.full_name || "Não selecionado"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Período</dt>
+                  <dd>
+                    {["employees", "employee_record"].includes(wizard.kind)
+                      ? "Cadastro atual"
+                      : `${dateLabel(wizard.start)} a ${dateLabel(wizard.end)}`}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Saída</dt>
+                  <dd>
+                    {wizard.kind === "employee_record"
+                      ? "Ficha preenchida em PDF"
+                      : "Tabela na tela, resumo em PDF ou pacote completo em Excel"}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          )}
+          <footer className="report-wizard-actions">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={wizardStep === 1}
+              onClick={() => setWizardStep((step) => Math.max(1, step - 1))}
+            >
+              <ChevronLeft />
+              Voltar
+            </Button>
+            <small>Você poderá alterar depois.</small>
+            {wizardStep < 4 ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  if (
+                    wizardStep === 3 &&
+                    wizardScope === "employee" &&
+                    !wizard.employeeId
+                  ) {
+                    setError("Selecione um funcionário para continuar.");
+                    return;
+                  }
+                  setError("");
+                  setWizardStep((step) => Math.min(4, step + 1));
+                }}
+              >
+                Continuar
+                <ChevronRight />
+              </Button>
+            ) : (
+              <Button type="button" onClick={finishWizard}>
+                {wizard.kind === "employee_record"
+                  ? "Preencher e gerar ficha"
+                  : "Montar relatório"}
+                <ChevronRight />
+              </Button>
+            )}
+          </footer>
+        </DialogContent>
+      </Dialog>
+      <EmployeeRecordDialog
+        open={!!recordEmployee}
+        onOpenChange={(value) => {
+          if (!value) setRecordEmployee(null);
+        }}
+        organization={ctx.organization}
+        employee={recordEmployee}
+        schedule={relationOne(recordEmployee?.work_schedules)}
+        canManage={
+          roleCanManage(ctx.member.role) || ctx.member.role === "manager"
+        }
+      />
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent className="export-dialog">
+          <DialogHeader>
+            <DialogTitle>Como deseja receber o relatório?</DialogTitle>
+            <DialogDescription>
+              A consulta atual será emitida com os mesmos filtros mostrados na
+              tela.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="export-options">
+            <button disabled={exporting} onClick={exportExcel}>
+              <span className="excel">
+                <FileSpreadsheet />
+              </span>
+              <p>
+                <b>Pacote completo em Excel</b>
+                <small>
+                  Arquivo .xlsx com abas de resumo, ponto diário, presenças,
+                  faltas, horas extras, banco, funcionários e ocorrências.
+                </small>
+              </p>
+              <ChevronRight />
+            </button>
+            <button disabled={exporting} onClick={exportPdf}>
+              <span className="pdf">
+                <FileText />
+              </span>
+              <p>
+                <b>Resumo em PDF</b>
+                <small>
+                  Documento pronto para conferir, imprimir ou compartilhar.
+                </small>
+              </p>
+              <ChevronRight />
+            </button>
+          </div>
+          {exporting && (
+            <div className="export-progress">
+              <RefreshCw className="spin" />
+              Preparando arquivo…
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
-function Methods({ctx}:{ctx:Context}){
-  const [rows,setRows]=useState<any[]>([]);
-  const load=useCallback(async()=>{const{data}=await supabase.from("clock_methods").select("*").eq("organization_id",ctx.organization.id).order("method");setRows(data??[])},[ctx.organization.id]);
-  useEffect(()=>{load()},[load]);
-  async function toggle(r:any,enabled:boolean){await supabase.from("clock_methods").update({enabled,updated_at:new Date().toISOString()}).eq("id",r.id);load()}
-  return <><PageHead title="Métodos de ponto" desc="A empresa decide o que aparece no aplicativo"/><section className="methods">{rows.map(r=><article className="surface" key={r.id}><header><span><Fingerprint/></span><Switch disabled={!["platform_admin","company_owner","hr_admin"].includes(ctx.member.role)} checked={r.enabled} onCheckedChange={v=>toggle(r,v)}/></header><h2>{methodLabels[r.method]??r.method}</h2><p>{r.method==="qr_code"?"Cada funcionário possui um QR exclusivo. O aplicativo valida o código contra o usuário conectado.":r.method==="face"?"Exige fornecedor de prova de vida e consentimento LGPD.":r.require_location?"Solicita a localização do aparelho.":"Registro sem localização."}</p><footer><Badge color={r.enabled?"green":"gray"}>{r.enabled?"Disponível":"Desativado"}</Badge></footer></article>)}</section><section className="surface qr-panel qr-info-panel"><div><h2>QR Code individual</h2><p>Os códigos agora ficam na ficha de cada funcionário. Abra <b>Funcionários</b> e escolha <b>QR individual</b> para visualizar, renovar ou baixar.</p></div><QrCode/></section></>
+function Methods({ ctx }: { ctx: Context }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from("clock_methods")
+      .select("*")
+      .eq("organization_id", ctx.organization.id)
+      .order("method");
+    setRows(data ?? []);
+  }, [ctx.organization.id]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  async function toggle(r: any, enabled: boolean) {
+    await supabase
+      .from("clock_methods")
+      .update({ enabled, updated_at: new Date().toISOString() })
+      .eq("id", r.id);
+    load();
+  }
+  return (
+    <>
+      <PageHead
+        title="Métodos de ponto"
+        desc="A empresa decide o que aparece no aplicativo"
+      />
+      <section className="methods">
+        {rows.map((r) => (
+          <article className="surface" key={r.id}>
+            <header>
+              <span>
+                <Fingerprint />
+              </span>
+              <Switch
+                disabled={
+                  !["platform_admin", "company_owner", "hr_admin"].includes(
+                    ctx.member.role,
+                  )
+                }
+                checked={r.enabled}
+                onCheckedChange={(v) => toggle(r, v)}
+              />
+            </header>
+            <h2>{methodLabels[r.method] ?? r.method}</h2>
+            <p>
+              {r.method === "qr_code"
+                ? "Cada funcionário possui um QR exclusivo. O aplicativo valida o código contra o usuário conectado."
+                : r.method === "face"
+                  ? "Exige fornecedor de prova de vida e consentimento LGPD."
+                  : r.require_location
+                    ? "Solicita a localização do aparelho."
+                    : "Registro sem localização."}
+            </p>
+            <footer>
+              <Badge color={r.enabled ? "green" : "gray"}>
+                {r.enabled ? "Disponível" : "Desativado"}
+              </Badge>
+            </footer>
+          </article>
+        ))}
+      </section>
+      <section className="surface qr-panel qr-info-panel">
+        <div>
+          <h2>QR Code individual</h2>
+          <p>
+            Os códigos agora ficam na ficha de cada funcionário. Abra{" "}
+            <b>Funcionários</b> e escolha <b>QR individual</b> para visualizar,
+            renovar ou baixar.
+          </p>
+        </div>
+        <QrCode />
+      </section>
+    </>
+  );
 }
 
-function Companies({ctx}:{ctx:Context}){
-  const[rows,setRows]=useState<any[]>([]);const[open,setOpen]=useState(false);const[editOpen,setEditOpen]=useState(false);const[error,setError]=useState("");const[notice,setNotice]=useState("");const[editError,setEditError]=useState("");const[saving,setSaving]=useState(false);const[issued,setIssued]=useState<{company:string;code:string;until:string}|null>(null);
-  const[form,setForm]=useState({company_code:"",legal_name:"",trade_name:"",tax_id:"",owner_name:"",owner_username:"",owner_email:"",owner_password:""});
-  const[edit,setEdit]=useState({organization_id:"",company_code:"",legal_name:"",trade_name:"",tax_id:"",timezone:"America/Rio_Branco",owner_name:"",owner_username:"",owner_email:"",temporary_password:""});
-  const load=useCallback(async()=>{
-    const[orgs,members,employees]=await Promise.all([
+function Companies({ ctx }: { ctx: Context }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [editError, setEditError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [issued, setIssued] = useState<{
+    company: string;
+    code: string;
+    until: string;
+  } | null>(null);
+  const [form, setForm] = useState({
+    company_code: "",
+    legal_name: "",
+    trade_name: "",
+    tax_id: "",
+    owner_name: "",
+    owner_username: "",
+    owner_email: "",
+    owner_password: "",
+  });
+  const [edit, setEdit] = useState({
+    organization_id: "",
+    company_code: "",
+    legal_name: "",
+    trade_name: "",
+    tax_id: "",
+    timezone: "America/Rio_Branco",
+    owner_name: "",
+    owner_username: "",
+    owner_email: "",
+    temporary_password: "",
+  });
+  const load = useCallback(async () => {
+    const [orgs, members, employees] = await Promise.all([
       supabase.from("organizations").select("*").order("trade_name"),
-      supabase.from("organization_members").select("organization_id,user_id").eq("role","company_owner").eq("active",true),
-      supabase.from("employees").select("organization_id,auth_user_id,username,email,full_name"),
+      supabase
+        .from("organization_members")
+        .select("organization_id,user_id")
+        .eq("role", "company_owner")
+        .eq("active", true),
+      supabase
+        .from("employees")
+        .select("organization_id,auth_user_id,username,email,full_name"),
     ]);
-    const owners=new Map((members.data??[]).map(m=>[m.organization_id,(employees.data??[]).find(e=>e.auth_user_id===m.user_id)]));
-    setRows((orgs.data??[]).map(org=>({...org,owner:owners.get(org.id)})));
-  },[]);
-  useEffect(()=>{load()},[load]);
-  if(ctx.member.role!=="platform_admin")return <section className="surface empty-state"><ShieldCheck/><h2>Acesso restrito ao administrador geral</h2></section>;
-  async function create(e:FormEvent){e.preventDefault();setError("");const{error}=await supabase.functions.invoke("provision-company",{body:form});if(error)return setError(await functionErrorMessage(error,"Não foi possível cadastrar a empresa."));setOpen(false);load()}
-  async function license(row:any,action:"issue"|"suspend"|"activate"){setError("");const{data,error}=await supabase.functions.invoke("license-manager",{body:{organization_id:row.id,action}});if(error)return setError(await functionErrorMessage(error,"Não foi possível alterar o credenciamento."));if(data?.code)setIssued({company:row.trade_name,code:data.code,until:data.license_until});load()}
-  function editCompany(row:any){setEditError("");setEdit({organization_id:row.id,company_code:row.company_code,legal_name:row.legal_name,trade_name:row.trade_name,tax_id:row.tax_id??"",timezone:row.timezone??"America/Rio_Branco",owner_name:row.owner?.full_name??`Administrador ${row.trade_name}`,owner_username:row.owner?.username??"admin",owner_email:row.owner?.email??"",temporary_password:row.owner?"":`Pn!${crypto.randomUUID().replace(/-/g,"").slice(0,10)}`});setEditOpen(true)}
-  function generatePassword(){const value=`Pn!${crypto.randomUUID().replace(/-/g,"").slice(0,10)}`;setEdit(current=>({...current,temporary_password:value}))}
-  async function saveCompany(e:FormEvent){e.preventDefault();setSaving(true);setEditError("");const{data,error}=await supabase.functions.invoke("manage-company",{body:edit});setSaving(false);if(error)return setEditError(await functionErrorMessage(error,"Não foi possível salvar a empresa."));setEditOpen(false);setNotice(data.owner_created?"Administrador criado e vinculado. O acesso já pode ser usado.":"Empresa e acesso atualizados.");load()}
-  async function deleteCompany(row:any){const confirmation=window.prompt(`Esta ação apaga a empresa e seus acessos. Digite exatamente: ${row.trade_name}`);if(confirmation===null)return;setError("");setNotice("");const{error}=await supabase.functions.invoke("manage-company",{body:{action:"delete",organization_id:row.id,confirm_name:confirmation}});if(error)return setError(await functionErrorMessage(error,"Não foi possível excluir a empresa."));setNotice(`${row.trade_name} foi excluída. O mesmo e-mail poderá ser usado em um novo cadastro.`);load()}
-  return <>
-    <PageHead title="Empresas e credenciamentos" desc="Cadastros, acessos, ativações anuais e suspensões manuais" action={<Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button><Plus/>Cadastrar manualmente</Button></DialogTrigger><DialogContent className="wide-dialog"><DialogHeader><DialogTitle>Cadastrar empresa</DialogTitle><DialogDescription>Também será criado o primeiro administrador da empresa.</DialogDescription></DialogHeader><form className="form-grid" onSubmit={create}><label>Código da empresa<Input required minLength={4} maxLength={12} value={form.company_code} onChange={e=>setForm({...form,company_code:e.target.value.toUpperCase()})}/></label><label>Nome fantasia<Input required value={form.trade_name} onChange={e=>setForm({...form,trade_name:e.target.value})}/></label><label>Razão social<Input required value={form.legal_name} onChange={e=>setForm({...form,legal_name:e.target.value})}/></label><label>CNPJ/CPF<Input value={form.tax_id} onChange={e=>setForm({...form,tax_id:e.target.value})}/></label><label>Nome do administrador<Input required value={form.owner_name} onChange={e=>setForm({...form,owner_name:e.target.value})}/></label><label>Usuário do administrador<Input required value={form.owner_username} onChange={e=>setForm({...form,owner_username:e.target.value.toLowerCase()})}/></label><label>E-mail pessoal<Input type="email" value={form.owner_email} onChange={e=>setForm({...form,owner_email:e.target.value})}/></label><label>Senha provisória<PasswordInput required minLength={8} value={form.owner_password} onChange={e=>setForm({...form,owner_password:e.target.value})}/></label><ErrorBox message={error}/><DialogFooter><Button>Criar empresa</Button></DialogFooter></form></DialogContent></Dialog>}/>
-    {issued&&<div className="license-banner"><div><b>Código anual para {issued.company}</b><strong>{issued.code}</strong><small>Uso em até 24 horas · credenciamento até {issued.until}</small></div><button onClick={()=>setIssued(null)}><X/></button></div>}
-    {notice&&<div className="success-banner company-notice"><Check/>{notice}</div>}<ErrorBox message={error}/><section className="surface table-surface"><Table><TableHeader><TableRow><TableHead>Empresa</TableHead><TableHead>Administrador</TableHead><TableHead>Código</TableHead><TableHead>Credenciamento</TableHead><TableHead>Válido até</TableHead><TableHead>Ações</TableHead></TableRow></TableHeader><TableBody>{rows.map(r=>{const principal=r.id===ctx.organization.id;return <TableRow key={r.id}><TableCell><b>{r.trade_name}</b><br/><small>{r.legal_name}</small></TableCell><TableCell><b>{principal?"Conta principal":r.owner?.full_name??"Acesso pendente"}</b><br/><small>{principal?"Protegida":r.owner?.username??"Clique em Dados e acesso"}</small></TableCell><TableCell><Badge color="blue">{r.company_code}</Badge></TableCell><TableCell><Badge color={r.license_status==="active"?"green":r.license_status==="suspended"?"amber":"gray"}>{r.license_status||"pending"}</Badge></TableCell><TableCell>{r.paid_until||"—"}</TableCell><TableCell>{principal?<Badge color="blue">Conta protegida</Badge>:<div className="row-actions"><Button size="sm" variant="outline" onClick={()=>editCompany(r)}><Pencil/>Dados e acesso</Button><Button size="sm" onClick={()=>license(r,"issue")}>Ativar por 1 ano</Button>{r.license_status==="suspended"?<Button size="sm" variant="outline" onClick={()=>license(r,"activate")}>Reativar</Button>:<Button size="sm" variant="outline" onClick={()=>license(r,"suspend")}>Suspender</Button>}<Button size="sm" variant="destructive" onClick={()=>deleteCompany(r)}>Excluir</Button></div>}</TableCell></TableRow>})}</TableBody></Table></section>
-    <Dialog open={editOpen} onOpenChange={setEditOpen}><DialogContent className="wide-dialog"><DialogHeader><DialogTitle>Empresa e acesso</DialogTitle><DialogDescription>Altere os dados, o login ou a senha. A senha atual continua se o campo ficar vazio.</DialogDescription></DialogHeader><form className="form-grid" onSubmit={saveCompany}><label>Código da empresa<Input required minLength={4} maxLength={12} value={edit.company_code} onChange={e=>setEdit({...edit,company_code:e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"")})}/></label><label>Nome fantasia<Input required value={edit.trade_name} onChange={e=>setEdit({...edit,trade_name:e.target.value})}/></label><label>Razão social<Input required value={edit.legal_name} onChange={e=>setEdit({...edit,legal_name:e.target.value})}/></label><label>CNPJ/CPF<Input value={edit.tax_id} onChange={e=>setEdit({...edit,tax_id:e.target.value})}/></label><label>Nome do administrador<Input required value={edit.owner_name} onChange={e=>setEdit({...edit,owner_name:e.target.value})}/></label><label>Usuário<Input required minLength={3} value={edit.owner_username} onChange={e=>setEdit({...edit,owner_username:e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g,"")})}/></label><label>E-mail de recuperação<Input required type="email" value={edit.owner_email} onChange={e=>setEdit({...edit,owner_email:e.target.value.toLowerCase()})}/></label><label>Fuso horário<Input required value={edit.timezone} onChange={e=>setEdit({...edit,timezone:e.target.value})}/></label><label className="full-row">Nova senha (opcional)<div className="password-generator"><PasswordInput minLength={8} value={edit.temporary_password} onChange={e=>setEdit({...edit,temporary_password:e.target.value})}/><Button type="button" variant="outline" onClick={generatePassword}>Gerar senha</Button></div></label><ErrorBox message={editError}/><DialogFooter><Button type="button" variant="outline" onClick={()=>setEditOpen(false)}>Cancelar</Button><Button disabled={saving}>{saving?"Salvando…":"Salvar alterações"}</Button></DialogFooter></form></DialogContent></Dialog>
-  </>
+    const owners = new Map(
+      (members.data ?? []).map((m) => [
+        m.organization_id,
+        (employees.data ?? []).find((e) => e.auth_user_id === m.user_id),
+      ]),
+    );
+    setRows(
+      (orgs.data ?? []).map((org) => ({ ...org, owner: owners.get(org.id) })),
+    );
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  if (ctx.member.role !== "platform_admin")
+    return (
+      <section className="surface empty-state">
+        <ShieldCheck />
+        <h2>Acesso restrito ao administrador geral</h2>
+      </section>
+    );
+  async function create(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    const { error } = await supabase.functions.invoke("provision-company", {
+      body: form,
+    });
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível cadastrar a empresa.",
+        ),
+      );
+    setOpen(false);
+    load();
+  }
+  async function license(row: any, action: "issue" | "suspend" | "activate") {
+    setError("");
+    const { data, error } = await supabase.functions.invoke("license-manager", {
+      body: { organization_id: row.id, action },
+    });
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível alterar o credenciamento.",
+        ),
+      );
+    if (data?.code)
+      setIssued({
+        company: row.trade_name,
+        code: data.code,
+        until: data.license_until,
+      });
+    load();
+  }
+  function editCompany(row: any) {
+    setEditError("");
+    setEdit({
+      organization_id: row.id,
+      company_code: row.company_code,
+      legal_name: row.legal_name,
+      trade_name: row.trade_name,
+      tax_id: row.tax_id ?? "",
+      timezone: row.timezone ?? "America/Rio_Branco",
+      owner_name: row.owner?.full_name ?? `Administrador ${row.trade_name}`,
+      owner_username: row.owner?.username ?? "admin",
+      owner_email: row.owner?.email ?? "",
+      temporary_password: row.owner
+        ? ""
+        : `Pn!${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`,
+    });
+    setEditOpen(true);
+  }
+  function generatePassword() {
+    const value = `Pn!${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
+    setEdit((current) => ({ ...current, temporary_password: value }));
+  }
+  async function saveCompany(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setEditError("");
+    const { data, error } = await supabase.functions.invoke("manage-company", {
+      body: edit,
+    });
+    setSaving(false);
+    if (error)
+      return setEditError(
+        await functionErrorMessage(error, "Não foi possível salvar a empresa."),
+      );
+    setEditOpen(false);
+    setNotice(
+      data.owner_created
+        ? "Administrador criado e vinculado. O acesso já pode ser usado."
+        : "Empresa e acesso atualizados.",
+    );
+    load();
+  }
+  async function deleteCompany(row: any) {
+    const confirmation = window.prompt(
+      `Esta ação apaga a empresa e seus acessos. Digite exatamente: ${row.trade_name}`,
+    );
+    if (confirmation === null) return;
+    setError("");
+    setNotice("");
+    const { error } = await supabase.functions.invoke("manage-company", {
+      body: {
+        action: "delete",
+        organization_id: row.id,
+        confirm_name: confirmation,
+      },
+    });
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível excluir a empresa.",
+        ),
+      );
+    setNotice(
+      `${row.trade_name} foi excluída. O mesmo e-mail poderá ser usado em um novo cadastro.`,
+    );
+    load();
+  }
+  return (
+    <>
+      <PageHead
+        title="Empresas e credenciamentos"
+        desc="Cadastros, acessos, ativações anuais e suspensões manuais"
+        action={
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus />
+                Cadastrar manualmente
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="wide-dialog">
+              <DialogHeader>
+                <DialogTitle>Cadastrar empresa</DialogTitle>
+                <DialogDescription>
+                  Também será criado o primeiro administrador da empresa.
+                </DialogDescription>
+              </DialogHeader>
+              <form className="form-grid" onSubmit={create}>
+                <label>
+                  Código da empresa
+                  <Input
+                    required
+                    minLength={4}
+                    maxLength={12}
+                    value={form.company_code}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        company_code: e.target.value.toUpperCase(),
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Nome fantasia
+                  <Input
+                    required
+                    value={form.trade_name}
+                    onChange={(e) =>
+                      setForm({ ...form, trade_name: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Razão social
+                  <Input
+                    required
+                    value={form.legal_name}
+                    onChange={(e) =>
+                      setForm({ ...form, legal_name: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  CNPJ/CPF
+                  <Input
+                    value={form.tax_id}
+                    onChange={(e) =>
+                      setForm({ ...form, tax_id: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Nome do administrador
+                  <Input
+                    required
+                    value={form.owner_name}
+                    onChange={(e) =>
+                      setForm({ ...form, owner_name: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Usuário do administrador
+                  <Input
+                    required
+                    value={form.owner_username}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        owner_username: e.target.value.toLowerCase(),
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  E-mail pessoal
+                  <Input
+                    type="email"
+                    value={form.owner_email}
+                    onChange={(e) =>
+                      setForm({ ...form, owner_email: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Senha provisória
+                  <PasswordInput
+                    required
+                    minLength={8}
+                    value={form.owner_password}
+                    onChange={(e) =>
+                      setForm({ ...form, owner_password: e.target.value })
+                    }
+                  />
+                </label>
+                <ErrorBox message={error} />
+                <DialogFooter>
+                  <Button>Criar empresa</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        }
+      />
+      {issued && (
+        <div className="license-banner">
+          <div>
+            <b>Código anual para {issued.company}</b>
+            <strong>{issued.code}</strong>
+            <small>
+              Uso em até 24 horas · credenciamento até {issued.until}
+            </small>
+          </div>
+          <button onClick={() => setIssued(null)}>
+            <X />
+          </button>
+        </div>
+      )}
+      {notice && (
+        <div className="success-banner company-notice">
+          <Check />
+          {notice}
+        </div>
+      )}
+      <ErrorBox message={error} />
+      <section className="surface table-surface">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Empresa</TableHead>
+              <TableHead>Administrador</TableHead>
+              <TableHead>Código</TableHead>
+              <TableHead>Credenciamento</TableHead>
+              <TableHead>Válido até</TableHead>
+              <TableHead>Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => {
+              const principal = r.id === ctx.organization.id;
+              return (
+                <TableRow key={r.id}>
+                  <TableCell>
+                    <b>{r.trade_name}</b>
+                    <br />
+                    <small>{r.legal_name}</small>
+                  </TableCell>
+                  <TableCell>
+                    <b>
+                      {principal
+                        ? "Conta principal"
+                        : (r.owner?.full_name ?? "Acesso pendente")}
+                    </b>
+                    <br />
+                    <small>
+                      {principal
+                        ? "Protegida"
+                        : (r.owner?.username ?? "Clique em Dados e acesso")}
+                    </small>
+                  </TableCell>
+                  <TableCell>
+                    <Badge color="blue">{r.company_code}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      color={
+                        r.license_status === "active"
+                          ? "green"
+                          : r.license_status === "suspended"
+                            ? "amber"
+                            : "gray"
+                      }
+                    >
+                      {r.license_status || "pending"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{r.paid_until || "—"}</TableCell>
+                  <TableCell>
+                    {principal ? (
+                      <Badge color="blue">Conta protegida</Badge>
+                    ) : (
+                      <div className="row-actions">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => editCompany(r)}
+                        >
+                          <Pencil />
+                          Dados e acesso
+                        </Button>
+                        <Button size="sm" onClick={() => license(r, "issue")}>
+                          Ativar por 1 ano
+                        </Button>
+                        {r.license_status === "suspended" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => license(r, "activate")}
+                          >
+                            Reativar
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => license(r, "suspend")}
+                          >
+                            Suspender
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => deleteCompany(r)}
+                        >
+                          Excluir
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </section>
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="wide-dialog">
+          <DialogHeader>
+            <DialogTitle>Empresa e acesso</DialogTitle>
+            <DialogDescription>
+              Altere os dados, o login ou a senha. A senha atual continua se o
+              campo ficar vazio.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="form-grid" onSubmit={saveCompany}>
+            <label>
+              Código da empresa
+              <Input
+                required
+                minLength={4}
+                maxLength={12}
+                value={edit.company_code}
+                onChange={(e) =>
+                  setEdit({
+                    ...edit,
+                    company_code: e.target.value
+                      .toUpperCase()
+                      .replace(/[^A-Z0-9]/g, ""),
+                  })
+                }
+              />
+            </label>
+            <label>
+              Nome fantasia
+              <Input
+                required
+                value={edit.trade_name}
+                onChange={(e) =>
+                  setEdit({ ...edit, trade_name: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Razão social
+              <Input
+                required
+                value={edit.legal_name}
+                onChange={(e) =>
+                  setEdit({ ...edit, legal_name: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              CNPJ/CPF
+              <Input
+                value={edit.tax_id}
+                onChange={(e) => setEdit({ ...edit, tax_id: e.target.value })}
+              />
+            </label>
+            <label>
+              Nome do administrador
+              <Input
+                required
+                value={edit.owner_name}
+                onChange={(e) =>
+                  setEdit({ ...edit, owner_name: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Usuário
+              <Input
+                required
+                minLength={3}
+                value={edit.owner_username}
+                onChange={(e) =>
+                  setEdit({
+                    ...edit,
+                    owner_username: e.target.value
+                      .toLowerCase()
+                      .replace(/[^a-z0-9._-]/g, ""),
+                  })
+                }
+              />
+            </label>
+            <label>
+              E-mail de recuperação
+              <Input
+                required
+                type="email"
+                value={edit.owner_email}
+                onChange={(e) =>
+                  setEdit({
+                    ...edit,
+                    owner_email: e.target.value.toLowerCase(),
+                  })
+                }
+              />
+            </label>
+            <label>
+              Fuso horário
+              <Input
+                required
+                value={edit.timezone}
+                onChange={(e) => setEdit({ ...edit, timezone: e.target.value })}
+              />
+            </label>
+            <label className="full-row">
+              Nova senha (opcional)
+              <div className="password-generator">
+                <PasswordInput
+                  minLength={8}
+                  value={edit.temporary_password}
+                  onChange={(e) =>
+                    setEdit({ ...edit, temporary_password: e.target.value })
+                  }
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={generatePassword}
+                >
+                  Gerar senha
+                </Button>
+              </div>
+            </label>
+            <ErrorBox message={editError} />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button disabled={saving}>
+                {saving ? "Salvando…" : "Salvar alterações"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
-function Billing({ctx}:{ctx:Context}){
-  const currentMonth=dateKeyInZone(new Date()).slice(0,7);const[month,setMonth]=useState(currentMonth);const[settings,setSettings]=useState<any>(null);const[rows,setRows]=useState<any[]>([]);const[overrides,setOverrides]=useState<any[]>([]);const[invoices,setInvoices]=useState<any[]>([]);const[loading,setLoading]=useState(true);const[saving,setSaving]=useState(false);const[error,setError]=useState("");const[editCompany,setEditCompany]=useState<any|null>(null);const[companyForm,setCompanyForm]=useState({unit_price_override:"",billing_enabled:true,billing_exempt:false,notes:""});
-  const money=(value:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(value||0);
-  const load=useCallback(async()=>{setLoading(true);setError("");const[config,organizations,employees,custom,invoiceRows]=await Promise.all([
-    supabase.from("platform_billing_settings").select("*").eq("id",1).single(),
-    supabase.from("organizations").select("id,trade_name,legal_name,company_code").order("trade_name"),
-    supabase.from("employees").select("organization_id").eq("status","active"),
-    supabase.from("organization_billing_settings").select("*"),
-    supabase.from("billing_invoices").select("*").eq("billing_month",month+"-01"),
-  ]);if(config.error){setError(config.error.message);setLoading(false);return}const counts=new Map<string,number>();for(const employee of employees.data??[])counts.set(employee.organization_id,(counts.get(employee.organization_id)??0)+1);setSettings(config.data);setRows((organizations.data??[]).map(org=>({...org,active_count:counts.get(org.id)??0})));setOverrides(custom.data??[]);setInvoices(invoiceRows.data??[]);setLoading(false)},[month]);
-  useEffect(()=>{load()},[load]);
-  if(ctx.member.role!=="platform_admin")return <section className="surface empty-state"><ShieldCheck/><h2>Acesso restrito ao administrador geral</h2></section>;
-  async function saveSettings(e:FormEvent){e.preventDefault();setSaving(true);setError("");const{error}=await supabase.functions.invoke("billing-manager",{body:{action:"update_settings",unit_price:settings.unit_price,billing_day:settings.billing_day,free_month:settings.free_month}});setSaving(false);if(error)return setError(await functionErrorMessage(error,"Não foi possível salvar a regra de cobrança."));load()}
-  async function generate(){setSaving(true);setError("");const{error}=await supabase.functions.invoke("billing-manager",{body:{action:"generate",month}});setSaving(false);if(error)return setError(await functionErrorMessage(error,"Não foi possível gerar a competência."));load()}
-  function openCompany(row:any){const custom=overrides.find(item=>item.organization_id===row.id);setEditCompany(row);setCompanyForm({unit_price_override:custom?.unit_price_override==null?"":String(custom.unit_price_override),billing_enabled:custom?.billing_enabled!==false,billing_exempt:custom?.billing_exempt===true,notes:custom?.notes??""})}
-  async function saveCompanyBilling(e:FormEvent){e.preventDefault();setSaving(true);setError("");const{error}=await supabase.functions.invoke("billing-manager",{body:{action:"update_company",organization_id:editCompany.id,...companyForm}});setSaving(false);if(error)return setError(await functionErrorMessage(error,"Não foi possível salvar a condição comercial."));setEditCompany(null);load()}
-  async function markPaid(invoice:any){setSaving(true);setError("");const{error}=await supabase.functions.invoke("billing-manager",{body:{action:"mark_paid",invoice_id:invoice.id}});setSaving(false);if(error)return setError(await functionErrorMessage(error,"Não foi possível confirmar o pagamento."));load()}
-  const freeMonth=settings?.free_month?.slice(0,7);const total=invoices.reduce((sum,item)=>sum+Number(item.total||0),0);const pending=invoices.filter(item=>item.status==="pending").length;
-  return <><PageHead title="Cobranças" desc="Mensalidade calculada pela quantidade de funcionários ativos" action={<div className="billing-head-actions"><label>Competência<Input type="month" value={month} onChange={e=>setMonth(e.target.value)}/></label><Button onClick={generate} disabled={saving||loading}><RefreshCw className={saving?"spin":""}/>Gerar competência</Button></div>}/>{freeMonth===month&&<section className="billing-free-banner"><Check/><div><b>Competência gratuita</b><p>Nenhuma empresa será cobrada em {new Intl.DateTimeFormat("pt-BR",{month:"long",year:"numeric"}).format(new Date(month+"-15T12:00:00"))}. A quantidade de ativos pode ser registrada, mas o total fica zerado.</p></div></section>}<ErrorBox message={error}/><section className="metrics billing-metrics">{[[String(rows.reduce((sum,row)=>sum+row.active_count,0)),"Funcionários ativos","Base atual de cálculo"],[money(total),"Total da competência",freeMonth===month?"Mês gratuito":"Valores gerados"],[String(pending),"Cobranças pendentes","Aguardando confirmação"],[String(invoices.length),"Empresas processadas",`${rows.length} cadastradas`]].map((item,index)=><article key={item[1]}><span className={"metric-mark m"+index}/><div><b>{item[0]}</b><p>{item[1]}</p><small>{item[2]}</small></div></article>)}</section><section className="surface billing-settings"><header><div><CreditCard/><span><h2>Regra padrão</h2><p>O valor é multiplicado somente pelos funcionários com situação Ativo.</p></span></div><Badge color={freeMonth===currentMonth?"green":"blue"}>{freeMonth===currentMonth?"Este mês é grátis":"Cobrança mensal"}</Badge></header>{settings&&<form onSubmit={saveSettings}><label>Preço por funcionário<Input type="number" min="0" step="0.01" value={settings.unit_price} onChange={e=>setSettings({...settings,unit_price:e.target.value})}/></label><label>Dia de vencimento<Input type="number" min="1" max="28" value={settings.billing_day} onChange={e=>setSettings({...settings,billing_day:e.target.value})}/></label><label>Mês gratuito<Input type="month" value={freeMonth??""} onChange={e=>setSettings({...settings,free_month:e.target.value?e.target.value+"-01":null})}/></label><Button disabled={saving}>{saving?"Salvando…":"Salvar regra"}</Button></form>}</section><section className="surface table-surface"><div className="billing-table-head"><div><h2>Empresas e valores</h2><p>A quantidade é fotografada quando a competência é gerada.</p></div>{loading&&<RefreshCw className="spin"/>}</div><div className="responsive-table"><Table><TableHeader><TableRow><TableHead>Empresa</TableHead><TableHead>Ativos agora</TableHead><TableHead>Preço unitário</TableHead><TableHead>Total</TableHead><TableHead>Situação</TableHead><TableHead>Ações</TableHead></TableRow></TableHeader><TableBody>{rows.map(row=>{const custom=overrides.find(item=>item.organization_id===row.id);const invoice=invoices.find(item=>item.organization_id===row.id);const unit=Number(custom?.unit_price_override??settings?.unit_price??0);const preview=row.active_count*unit;return <TableRow key={row.id}><TableCell><b>{row.trade_name}</b><br/><small>{row.company_code}</small></TableCell><TableCell><b>{invoice?.active_employee_count??row.active_count}</b></TableCell><TableCell>{money(invoice?.unit_price??unit)}{custom?.unit_price_override!=null&&<><br/><small>Preço personalizado</small></>}</TableCell><TableCell><b>{money(invoice?.total??(freeMonth===month?0:preview))}</b>{freeMonth===month&&<><br/><small>Desconto integral</small></>}</TableCell><TableCell><Badge color={invoice?.status==="paid"?"green":invoice?.status==="pending"?"amber":invoice?.status==="free"?"blue":"gray"}>{invoice?.status==="paid"?"Pago":invoice?.status==="pending"?"Pendente":invoice?.status==="free"?"Gratuito":invoice?.status==="cancelled"?"Desativado":"Prévia"}</Badge></TableCell><TableCell><div className="row-actions"><Button size="sm" variant="outline" onClick={()=>openCompany(row)}>Condição comercial</Button>{invoice?.status==="pending"&&<Button size="sm" onClick={()=>markPaid(invoice)}>Marcar pago</Button>}</div></TableCell></TableRow>})}</TableBody></Table></div></section><Dialog open={!!editCompany} onOpenChange={value=>{if(!value)setEditCompany(null)}}><DialogContent><DialogHeader><DialogTitle>Condição comercial</DialogTitle><DialogDescription>{editCompany?.trade_name} · deixe o preço vazio para usar a regra padrão.</DialogDescription></DialogHeader><form className="form-grid billing-company-form" onSubmit={saveCompanyBilling}><label className="full-row">Preço personalizado por funcionário<Input type="number" min="0" step="0.01" value={companyForm.unit_price_override} onChange={e=>setCompanyForm({...companyForm,unit_price_override:e.target.value})} placeholder={settings?money(Number(settings.unit_price)):"Regra padrão"}/></label><label className="billing-check"><input type="checkbox" checked={companyForm.billing_enabled} onChange={e=>setCompanyForm({...companyForm,billing_enabled:e.target.checked})}/><span><b>Cobrança habilitada</b><small>Inclui a empresa nas próximas competências.</small></span></label><label className="billing-check"><input type="checkbox" checked={companyForm.billing_exempt} onChange={e=>setCompanyForm({...companyForm,billing_exempt:e.target.checked})}/><span><b>Empresa isenta</b><small>Mantém o total zerado até esta opção ser retirada.</small></span></label><label className="full-row">Observações<Input value={companyForm.notes} onChange={e=>setCompanyForm({...companyForm,notes:e.target.value})} placeholder="Condição negociada, contrato ou lembrete"/></label><DialogFooter className="full-row"><Button type="button" variant="outline" onClick={()=>setEditCompany(null)}>Cancelar</Button><Button disabled={saving}>Salvar</Button></DialogFooter></form></DialogContent></Dialog></>
+function Billing({ ctx }: { ctx: Context }) {
+  const currentMonth = dateKeyInZone(new Date()).slice(0, 7);
+  const [month, setMonth] = useState(currentMonth);
+  const [settings, setSettings] = useState<any>(null);
+  const [rows, setRows] = useState<any[]>([]);
+  const [overrides, setOverrides] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [editCompany, setEditCompany] = useState<any | null>(null);
+  const [companyForm, setCompanyForm] = useState({
+    unit_price_override: "",
+    billing_enabled: true,
+    billing_exempt: false,
+    notes: "",
+  });
+  const money = (value: number) =>
+    new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value || 0);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    const [config, organizations, employees, custom, invoiceRows] =
+      await Promise.all([
+        supabase
+          .from("platform_billing_settings")
+          .select("*")
+          .eq("id", 1)
+          .single(),
+        supabase
+          .from("organizations")
+          .select("id,trade_name,legal_name,company_code")
+          .order("trade_name"),
+        supabase
+          .from("employees")
+          .select("organization_id")
+          .eq("status", "active"),
+        supabase.from("organization_billing_settings").select("*"),
+        supabase
+          .from("billing_invoices")
+          .select("*")
+          .eq("billing_month", month + "-01"),
+      ]);
+    if (config.error) {
+      setError(config.error.message);
+      setLoading(false);
+      return;
+    }
+    const counts = new Map<string, number>();
+    for (const employee of employees.data ?? [])
+      counts.set(
+        employee.organization_id,
+        (counts.get(employee.organization_id) ?? 0) + 1,
+      );
+    setSettings(config.data);
+    setRows(
+      (organizations.data ?? []).map((org) => ({
+        ...org,
+        active_count: counts.get(org.id) ?? 0,
+      })),
+    );
+    setOverrides(custom.data ?? []);
+    setInvoices(invoiceRows.data ?? []);
+    setLoading(false);
+  }, [month]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  if (ctx.member.role !== "platform_admin")
+    return (
+      <section className="surface empty-state">
+        <ShieldCheck />
+        <h2>Acesso restrito ao administrador geral</h2>
+      </section>
+    );
+  async function saveSettings(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    const { error } = await supabase.functions.invoke("billing-manager", {
+      body: {
+        action: "update_settings",
+        unit_price: settings.unit_price,
+        billing_day: settings.billing_day,
+        free_month: settings.free_month,
+      },
+    });
+    setSaving(false);
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível salvar a regra de cobrança.",
+        ),
+      );
+    load();
+  }
+  async function generate() {
+    setSaving(true);
+    setError("");
+    const { error } = await supabase.functions.invoke("billing-manager", {
+      body: { action: "generate", month },
+    });
+    setSaving(false);
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível gerar a competência.",
+        ),
+      );
+    load();
+  }
+  function openCompany(row: any) {
+    const custom = overrides.find((item) => item.organization_id === row.id);
+    setEditCompany(row);
+    setCompanyForm({
+      unit_price_override:
+        custom?.unit_price_override == null
+          ? ""
+          : String(custom.unit_price_override),
+      billing_enabled: custom?.billing_enabled !== false,
+      billing_exempt: custom?.billing_exempt === true,
+      notes: custom?.notes ?? "",
+    });
+  }
+  async function saveCompanyBilling(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    const { error } = await supabase.functions.invoke("billing-manager", {
+      body: {
+        action: "update_company",
+        organization_id: editCompany.id,
+        ...companyForm,
+      },
+    });
+    setSaving(false);
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível salvar a condição comercial.",
+        ),
+      );
+    setEditCompany(null);
+    load();
+  }
+  async function markPaid(invoice: any) {
+    setSaving(true);
+    setError("");
+    const { error } = await supabase.functions.invoke("billing-manager", {
+      body: { action: "mark_paid", invoice_id: invoice.id },
+    });
+    setSaving(false);
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível confirmar o pagamento.",
+        ),
+      );
+    load();
+  }
+  const freeMonth = settings?.free_month?.slice(0, 7);
+  const total = invoices.reduce(
+    (sum, item) => sum + Number(item.total || 0),
+    0,
+  );
+  const pending = invoices.filter((item) => item.status === "pending").length;
+  return (
+    <>
+      <PageHead
+        title="Cobranças"
+        desc="Mensalidade calculada pela quantidade de funcionários ativos"
+        action={
+          <div className="billing-head-actions">
+            <label>
+              Competência
+              <Input
+                type="month"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+              />
+            </label>
+            <Button onClick={generate} disabled={saving || loading}>
+              <RefreshCw className={saving ? "spin" : ""} />
+              Gerar competência
+            </Button>
+          </div>
+        }
+      />
+      {freeMonth === month && (
+        <section className="billing-free-banner">
+          <Check />
+          <div>
+            <b>Competência gratuita</b>
+            <p>
+              Nenhuma empresa será cobrada em{" "}
+              {new Intl.DateTimeFormat("pt-BR", {
+                month: "long",
+                year: "numeric",
+              }).format(new Date(month + "-15T12:00:00"))}
+              . A quantidade de ativos pode ser registrada, mas o total fica
+              zerado.
+            </p>
+          </div>
+        </section>
+      )}
+      <ErrorBox message={error} />
+      <section className="metrics billing-metrics">
+        {[
+          [
+            String(rows.reduce((sum, row) => sum + row.active_count, 0)),
+            "Funcionários ativos",
+            "Base atual de cálculo",
+          ],
+          [
+            money(total),
+            "Total da competência",
+            freeMonth === month ? "Mês gratuito" : "Valores gerados",
+          ],
+          [String(pending), "Cobranças pendentes", "Aguardando confirmação"],
+          [
+            String(invoices.length),
+            "Empresas processadas",
+            `${rows.length} cadastradas`,
+          ],
+        ].map((item, index) => (
+          <article key={item[1]}>
+            <span className={"metric-mark m" + index} />
+            <div>
+              <b>{item[0]}</b>
+              <p>{item[1]}</p>
+              <small>{item[2]}</small>
+            </div>
+          </article>
+        ))}
+      </section>
+      <section className="surface billing-settings">
+        <header>
+          <div>
+            <CreditCard />
+            <span>
+              <h2>Regra padrão</h2>
+              <p>
+                O valor é multiplicado somente pelos funcionários com situação
+                Ativo.
+              </p>
+            </span>
+          </div>
+          <Badge color={freeMonth === currentMonth ? "green" : "blue"}>
+            {freeMonth === currentMonth
+              ? "Este mês é grátis"
+              : "Cobrança mensal"}
+          </Badge>
+        </header>
+        {settings && (
+          <form onSubmit={saveSettings}>
+            <label>
+              Preço por funcionário
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={settings.unit_price}
+                onChange={(e) =>
+                  setSettings({ ...settings, unit_price: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Dia de vencimento
+              <Input
+                type="number"
+                min="1"
+                max="28"
+                value={settings.billing_day}
+                onChange={(e) =>
+                  setSettings({ ...settings, billing_day: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Mês gratuito
+              <Input
+                type="month"
+                value={freeMonth ?? ""}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    free_month: e.target.value ? e.target.value + "-01" : null,
+                  })
+                }
+              />
+            </label>
+            <Button disabled={saving}>
+              {saving ? "Salvando…" : "Salvar regra"}
+            </Button>
+          </form>
+        )}
+      </section>
+      <section className="surface table-surface">
+        <div className="billing-table-head">
+          <div>
+            <h2>Empresas e valores</h2>
+            <p>A quantidade é fotografada quando a competência é gerada.</p>
+          </div>
+          {loading && <RefreshCw className="spin" />}
+        </div>
+        <div className="responsive-table">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Empresa</TableHead>
+                <TableHead>Ativos agora</TableHead>
+                <TableHead>Preço unitário</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead>Situação</TableHead>
+                <TableHead>Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => {
+                const custom = overrides.find(
+                  (item) => item.organization_id === row.id,
+                );
+                const invoice = invoices.find(
+                  (item) => item.organization_id === row.id,
+                );
+                const unit = Number(
+                  custom?.unit_price_override ?? settings?.unit_price ?? 0,
+                );
+                const preview = row.active_count * unit;
+                return (
+                  <TableRow key={row.id}>
+                    <TableCell>
+                      <b>{row.trade_name}</b>
+                      <br />
+                      <small>{row.company_code}</small>
+                    </TableCell>
+                    <TableCell>
+                      <b>
+                        {invoice?.active_employee_count ?? row.active_count}
+                      </b>
+                    </TableCell>
+                    <TableCell>
+                      {money(invoice?.unit_price ?? unit)}
+                      {custom?.unit_price_override != null && (
+                        <>
+                          <br />
+                          <small>Preço personalizado</small>
+                        </>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <b>
+                        {money(
+                          invoice?.total ?? (freeMonth === month ? 0 : preview),
+                        )}
+                      </b>
+                      {freeMonth === month && (
+                        <>
+                          <br />
+                          <small>Desconto integral</small>
+                        </>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        color={
+                          invoice?.status === "paid"
+                            ? "green"
+                            : invoice?.status === "pending"
+                              ? "amber"
+                              : invoice?.status === "free"
+                                ? "blue"
+                                : "gray"
+                        }
+                      >
+                        {invoice?.status === "paid"
+                          ? "Pago"
+                          : invoice?.status === "pending"
+                            ? "Pendente"
+                            : invoice?.status === "free"
+                              ? "Gratuito"
+                              : invoice?.status === "cancelled"
+                                ? "Desativado"
+                                : "Prévia"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="row-actions">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openCompany(row)}
+                        >
+                          Condição comercial
+                        </Button>
+                        {invoice?.status === "pending" && (
+                          <Button size="sm" onClick={() => markPaid(invoice)}>
+                            Marcar pago
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </section>
+      <Dialog
+        open={!!editCompany}
+        onOpenChange={(value) => {
+          if (!value) setEditCompany(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Condição comercial</DialogTitle>
+            <DialogDescription>
+              {editCompany?.trade_name} · deixe o preço vazio para usar a regra
+              padrão.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="form-grid billing-company-form"
+            onSubmit={saveCompanyBilling}
+          >
+            <label className="full-row">
+              Preço personalizado por funcionário
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={companyForm.unit_price_override}
+                onChange={(e) =>
+                  setCompanyForm({
+                    ...companyForm,
+                    unit_price_override: e.target.value,
+                  })
+                }
+                placeholder={
+                  settings ? money(Number(settings.unit_price)) : "Regra padrão"
+                }
+              />
+            </label>
+            <label className="billing-check">
+              <input
+                type="checkbox"
+                checked={companyForm.billing_enabled}
+                onChange={(e) =>
+                  setCompanyForm({
+                    ...companyForm,
+                    billing_enabled: e.target.checked,
+                  })
+                }
+              />
+              <span>
+                <b>Cobrança habilitada</b>
+                <small>Inclui a empresa nas próximas competências.</small>
+              </span>
+            </label>
+            <label className="billing-check">
+              <input
+                type="checkbox"
+                checked={companyForm.billing_exempt}
+                onChange={(e) =>
+                  setCompanyForm({
+                    ...companyForm,
+                    billing_exempt: e.target.checked,
+                  })
+                }
+              />
+              <span>
+                <b>Empresa isenta</b>
+                <small>
+                  Mantém o total zerado até esta opção ser retirada.
+                </small>
+              </span>
+            </label>
+            <label className="full-row">
+              Observações
+              <Input
+                value={companyForm.notes}
+                onChange={(e) =>
+                  setCompanyForm({ ...companyForm, notes: e.target.value })
+                }
+                placeholder="Condição negociada, contrato ou lembrete"
+              />
+            </label>
+            <DialogFooter className="full-row">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditCompany(null)}
+              >
+                Cancelar
+              </Button>
+              <Button disabled={saving}>Salvar</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
-function Configuration({ctx,onRefresh}:{ctx:Context;onRefresh:()=>void}){
-  const [code,setCode]=useState(ctx.organization.company_code);const [name,setName]=useState(ctx.organization.trade_name);const [legal,setLegal]=useState(ctx.organization.legal_name);const [timezone,setTimezone]=useState(ctx.organization.timezone);const [saved,setSaved]=useState(false);const[error,setError]=useState("");const[passwords,setPasswords]=useState({password:"",confirm:""});const[passwordSaved,setPasswordSaved]=useState(false);const[passwordError,setPasswordError]=useState("");const[changingPassword,setChangingPassword]=useState(false);
-  const allowed=["platform_admin","company_owner","hr_admin"].includes(ctx.member.role);
-  async function save(e:FormEvent){e.preventDefault();setError("");setSaved(false);if(code!==ctx.organization.company_code){const{error}=await supabase.functions.invoke("update-company-code",{body:{organization_id:ctx.organization.id,company_code:code}});if(error)return setError(await functionErrorMessage(error,"Não foi possível alterar o código da empresa."))}const{error}=await supabase.from("organizations").update({trade_name:name,legal_name:legal,timezone,updated_at:new Date().toISOString()}).eq("id",ctx.organization.id);if(error)return setError(error.message);setSaved(true);onRefresh()}
-  async function changePassword(e:FormEvent){e.preventDefault();setPasswordError("");setPasswordSaved(false);if(passwords.password.length<8)return setPasswordError("Use pelo menos 8 caracteres.");if(passwords.password!==passwords.confirm)return setPasswordError("As senhas não coincidem.");setChangingPassword(true);const{error}=await supabase.auth.updateUser({password:passwords.password});setChangingPassword(false);if(error)return setPasswordError("Não foi possível alterar a senha.");setPasswords({password:"",confirm:""});setPasswordSaved(true)}
-  return <><PageHead title="Configurações" desc="Perfil da empresa e segurança do seu acesso"/><form className="surface settings-form" onSubmit={save}><label>Código da empresa<Input disabled={!allowed} minLength={4} maxLength={12} value={code} onChange={e=>setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))}/><small>Funcionários usam este código para entrar.</small></label><label>Nome fantasia<Input value={name} onChange={e=>setName(e.target.value)}/></label><label>Razão social<Input value={legal} onChange={e=>setLegal(e.target.value)}/></label><label>Fuso horário<Input value={timezone} onChange={e=>setTimezone(e.target.value)}/></label><ErrorBox message={error}/><Button disabled={!allowed}>Salvar alterações</Button>{saved&&<span className="saved"><Check/>Salvo</span>}</form><form className="surface settings-form password-settings" onSubmit={changePassword}><header><KeyRound/><div><h2>Alterar minha senha</h2><p>Troque a senha deste usuário sem solicitar ajuda ao administrador.</p></div></header><label>Nova senha<PasswordInput required minLength={8} autoComplete="new-password" value={passwords.password} onChange={e=>setPasswords({...passwords,password:e.target.value})}/></label><label>Confirmar senha<PasswordInput required minLength={8} autoComplete="new-password" value={passwords.confirm} onChange={e=>setPasswords({...passwords,confirm:e.target.value})}/></label><ErrorBox message={passwordError}/><Button disabled={changingPassword}>{changingPassword?"Salvando…":"Alterar senha"}</Button>{passwordSaved&&<span className="saved"><Check/>Senha alterada</span>}</form></>
+function Configuration({
+  ctx,
+  onRefresh,
+}: {
+  ctx: Context;
+  onRefresh: () => void;
+}) {
+  const [code, setCode] = useState(ctx.organization.company_code);
+  const [name, setName] = useState(ctx.organization.trade_name);
+  const [legal, setLegal] = useState(ctx.organization.legal_name);
+  const [timezone, setTimezone] = useState(ctx.organization.timezone);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  const [passwords, setPasswords] = useState({ password: "", confirm: "" });
+  const [passwordSaved, setPasswordSaved] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const allowed = ["platform_admin", "company_owner", "hr_admin"].includes(
+    ctx.member.role,
+  );
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setSaved(false);
+    if (code !== ctx.organization.company_code) {
+      const { error } = await supabase.functions.invoke("update-company-code", {
+        body: { organization_id: ctx.organization.id, company_code: code },
+      });
+      if (error)
+        return setError(
+          await functionErrorMessage(
+            error,
+            "Não foi possível alterar o código da empresa.",
+          ),
+        );
+    }
+    const { error } = await supabase
+      .from("organizations")
+      .update({
+        trade_name: name,
+        legal_name: legal,
+        timezone,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", ctx.organization.id);
+    if (error) return setError(error.message);
+    setSaved(true);
+    onRefresh();
+  }
+  async function changePassword(e: FormEvent) {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSaved(false);
+    if (passwords.password.length < 8)
+      return setPasswordError("Use pelo menos 8 caracteres.");
+    if (passwords.password !== passwords.confirm)
+      return setPasswordError("As senhas não coincidem.");
+    setChangingPassword(true);
+    const { error } = await supabase.auth.updateUser({
+      password: passwords.password,
+    });
+    setChangingPassword(false);
+    if (error) return setPasswordError("Não foi possível alterar a senha.");
+    setPasswords({ password: "", confirm: "" });
+    setPasswordSaved(true);
+  }
+  return (
+    <>
+      <PageHead
+        title="Configurações"
+        desc="Perfil da empresa e segurança do seu acesso"
+      />
+      <form className="surface settings-form" onSubmit={save}>
+        <label>
+          Código da empresa
+          <Input
+            disabled={!allowed}
+            minLength={4}
+            maxLength={12}
+            value={code}
+            onChange={(e) =>
+              setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))
+            }
+          />
+          <small>Funcionários usam este código para entrar.</small>
+        </label>
+        <label>
+          Nome fantasia
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label>
+          Razão social
+          <Input value={legal} onChange={(e) => setLegal(e.target.value)} />
+        </label>
+        <label>
+          Fuso horário
+          <Input
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+          />
+        </label>
+        <ErrorBox message={error} />
+        <Button disabled={!allowed}>Salvar alterações</Button>
+        {saved && (
+          <span className="saved">
+            <Check />
+            Salvo
+          </span>
+        )}
+      </form>
+      <form
+        className="surface settings-form password-settings"
+        onSubmit={changePassword}
+      >
+        <header>
+          <KeyRound />
+          <div>
+            <h2>Alterar minha senha</h2>
+            <p>
+              Troque a senha deste usuário sem solicitar ajuda ao administrador.
+            </p>
+          </div>
+        </header>
+        <label>
+          Nova senha
+          <PasswordInput
+            required
+            minLength={8}
+            autoComplete="new-password"
+            value={passwords.password}
+            onChange={(e) =>
+              setPasswords({ ...passwords, password: e.target.value })
+            }
+          />
+        </label>
+        <label>
+          Confirmar senha
+          <PasswordInput
+            required
+            minLength={8}
+            autoComplete="new-password"
+            value={passwords.confirm}
+            onChange={(e) =>
+              setPasswords({ ...passwords, confirm: e.target.value })
+            }
+          />
+        </label>
+        <ErrorBox message={passwordError} />
+        <Button disabled={changingPassword}>
+          {changingPassword ? "Salvando…" : "Alterar senha"}
+        </Button>
+        {passwordSaved && (
+          <span className="saved">
+            <Check />
+            Senha alterada
+          </span>
+        )}
+      </form>
+    </>
+  );
 }
 
-
-const demoMenu = menu.filter(([name])=>!["Empresas","Cobranças"].includes(name));
-const demoGuides:Record<string,{title:string;description:string;items:string[]}> = {
-  "Hoje":{title:"Panorama do dia",description:"Acompanhe rapidamente presença, registros, pendências e setores ativos.",items:["Confira os indicadores principais.","Veja os últimos registros recebidos.","Use os atalhos para investigar uma pendência."]},
-  "Funcionários":{title:"Cadastro completo da equipe",description:"Consulte perfis, vínculos, CBO, jornada, setor e situação de cada colaborador.",items:["Pesquise por nome ou matrícula.","Abra a ficha para revisar dados trabalhistas.","Gere o QR individual ou desative o vínculo."]},
-  "Dispositivos":{title:"Celulares autorizados",description:"Veja quais aparelhos foram vinculados às contas dos colaboradores.",items:["Identifique aparelho e usuário.","Revogue acessos desconhecidos.","Use a lista em auditorias de segurança."]},
-  "Terminais":{title:"Aparelhos compartilhados",description:"Administre celulares ou tablets corporativos usados como relógio de ponto.",items:["Cadastre o terminal por setor.","Defina um PIN seguro.","Suspenda o aparelho quando necessário."]},
-  "Setores e líderes":{title:"Estrutura da empresa",description:"Organize setores, responsáveis e equipes para distribuir o acompanhamento.",items:["Crie os setores da empresa.","Defina um líder para cada equipe.","O líder enxerga somente o setor permitido."]},
-  "Chamada":{title:"Chamada do setor",description:"O líder confirma presença, falta ou justificativa sem alterar o registro original.",items:["Escolha setor e data.","Marque a situação de cada pessoa.","Salve a chamada para o RH conferir."]},
-  "Jornadas":{title:"Regras de carga horária",description:"Configure carga semanal, meta diária, intervalo e jornada flexível.",items:["Use 44 horas semanais quando aplicável.","Ative jornada flexível para calcular pelo total diário.","Associe a jornada ao funcionário."]},
-  "Banco de horas":{title:"Horas extras sem conta manual",description:"Veja créditos, débitos, adicional de 50%, adicional de 100% e saldo acumulado por colaborador.",items:["Confira o saldo individual e geral.","Cadastre datas especiais no calendário.","Defina pagamento ou banco na ficha do funcionário."]},
-  "Conferência":{title:"Revisão dos registros",description:"Compare marcações recebidas e confirme inconsistências antes do fechamento.",items:["Filtre o período.","Verifique origem, horário e colaborador.","A confirmação mantém a trilha de auditoria."]},
-  "Ocorrências":{title:"Faltas e justificativas",description:"Analise atestados, esquecimentos, ausências e outras solicitações.",items:["Abra a justificativa enviada.","Aprove ou recuse com observação.","A decisão aparece nos relatórios."]},
-  "Relatórios":{title:"Relatórios para o RH",description:"Escolha tipo, período e colaborador para obter uma visão geral ou individual.",items:["Selecione a data inicial e final.","Use Geral ou escolha um colaborador.","Exporte em planilha ou PDF no ambiente contratado."]},
-  "Métodos de ponto":{title:"Formas de registrar",description:"Defina os métodos permitidos e as validações necessárias.",items:["Habilite botão no aplicativo ou QR individual.","Exija localização quando a política pedir.","Biometria depende de integração homologada."]},
-  "Configurações":{title:"Perfil da empresa",description:"Consulte código de acesso, identificação e fuso horário da organização.",items:["O código identifica a empresa no login.","Somente perfis autorizados alteram dados.","Mudanças reais ficam bloqueadas nesta demonstração."]}
+const demoMenu = menu.filter(
+  ([name]) => !["Empresas", "Cobranças"].includes(name),
+);
+const demoGuides: Record<
+  string,
+  { title: string; description: string; items: string[] }
+> = {
+  Hoje: {
+    title: "Panorama do dia",
+    description:
+      "Acompanhe rapidamente presença, registros, pendências e setores ativos.",
+    items: [
+      "Confira os indicadores principais.",
+      "Veja os últimos registros recebidos.",
+      "Use os atalhos para investigar uma pendência.",
+    ],
+  },
+  Funcionários: {
+    title: "Cadastro completo da equipe",
+    description:
+      "Consulte perfis, vínculos, CBO, jornada, setor e situação de cada colaborador.",
+    items: [
+      "Pesquise por nome ou matrícula.",
+      "Abra a ficha para revisar dados trabalhistas.",
+      "Gere o QR individual ou desative o vínculo.",
+    ],
+  },
+  Dispositivos: {
+    title: "Celulares autorizados",
+    description:
+      "Veja quais aparelhos foram vinculados às contas dos colaboradores.",
+    items: [
+      "Identifique aparelho e usuário.",
+      "Revogue acessos desconhecidos.",
+      "Use a lista em auditorias de segurança.",
+    ],
+  },
+  Terminais: {
+    title: "Aparelhos compartilhados",
+    description:
+      "Administre celulares ou tablets corporativos usados como relógio de ponto.",
+    items: [
+      "Cadastre o terminal por setor.",
+      "Defina um PIN seguro.",
+      "Suspenda o aparelho quando necessário.",
+    ],
+  },
+  "Setores e líderes": {
+    title: "Estrutura da empresa",
+    description:
+      "Organize setores, responsáveis e equipes para distribuir o acompanhamento.",
+    items: [
+      "Crie os setores da empresa.",
+      "Defina um líder para cada equipe.",
+      "O líder enxerga somente o setor permitido.",
+    ],
+  },
+  Chamada: {
+    title: "Chamada do setor",
+    description:
+      "O líder confirma presença, falta ou justificativa sem alterar o registro original.",
+    items: [
+      "Escolha setor e data.",
+      "Marque a situação de cada pessoa.",
+      "Salve a chamada para o RH conferir.",
+    ],
+  },
+  Jornadas: {
+    title: "Regras de carga horária",
+    description:
+      "Configure carga semanal, meta diária, intervalo e jornada flexível.",
+    items: [
+      "Use 44 horas semanais quando aplicável.",
+      "Ative jornada flexível para calcular pelo total diário.",
+      "Associe a jornada ao funcionário.",
+    ],
+  },
+  "Banco de horas": {
+    title: "Horas extras sem conta manual",
+    description:
+      "Veja créditos, débitos, adicional de 50%, adicional de 100% e saldo acumulado por colaborador.",
+    items: [
+      "Confira o saldo individual e geral.",
+      "Cadastre datas especiais no calendário.",
+      "Defina pagamento ou banco na ficha do funcionário.",
+    ],
+  },
+  Conferência: {
+    title: "Revisão dos registros",
+    description:
+      "Compare marcações recebidas e confirme inconsistências antes do fechamento.",
+    items: [
+      "Filtre o período.",
+      "Verifique origem, horário e colaborador.",
+      "A confirmação mantém a trilha de auditoria.",
+    ],
+  },
+  Ocorrências: {
+    title: "Faltas e justificativas",
+    description:
+      "Analise atestados, esquecimentos, ausências e outras solicitações.",
+    items: [
+      "Abra a justificativa enviada.",
+      "Aprove ou recuse com observação.",
+      "A decisão aparece nos relatórios.",
+    ],
+  },
+  Relatórios: {
+    title: "Relatórios para o RH",
+    description:
+      "Escolha tipo, período e colaborador para obter uma visão geral ou individual.",
+    items: [
+      "Selecione a data inicial e final.",
+      "Use Geral ou escolha um colaborador.",
+      "Exporte em planilha ou PDF no ambiente contratado.",
+    ],
+  },
+  "Métodos de ponto": {
+    title: "Formas de registrar",
+    description: "Defina os métodos permitidos e as validações necessárias.",
+    items: [
+      "Habilite botão no aplicativo ou QR individual.",
+      "Exija localização quando a política pedir.",
+      "Biometria depende de integração homologada.",
+    ],
+  },
+  Configurações: {
+    title: "Perfil da empresa",
+    description:
+      "Consulte código de acesso, identificação e fuso horário da organização.",
+    items: [
+      "O código identifica a empresa no login.",
+      "Somente perfis autorizados alteram dados.",
+      "Mudanças reais ficam bloqueadas nesta demonstração.",
+    ],
+  },
 };
-const demoEmployees=[
-  {name:"Ana Souza",code:"PN-001",department:"Administrativo",job:"Assistente administrativa",status:"Presente"},
-  {name:"Bruno Lima",code:"PN-002",department:"Operações",job:"Auxiliar de produção",status:"Presente"},
-  {name:"Carla Mendes",code:"PN-003",department:"Comercial",job:"Consultora comercial",status:"Justificada"},
-  {name:"Diego Alves",code:"PN-004",department:"Operações",job:"Operador de máquinas",status:"Ausente"}
+const demoEmployees = [
+  {
+    name: "Ana Souza",
+    code: "PN-001",
+    department: "Administrativo",
+    job: "Assistente administrativa",
+    status: "Presente",
+  },
+  {
+    name: "Bruno Lima",
+    code: "PN-002",
+    department: "Operações",
+    job: "Auxiliar de produção",
+    status: "Presente",
+  },
+  {
+    name: "Carla Mendes",
+    code: "PN-003",
+    department: "Comercial",
+    job: "Consultora comercial",
+    status: "Justificada",
+  },
+  {
+    name: "Diego Alves",
+    code: "PN-004",
+    department: "Operações",
+    job: "Operador de máquinas",
+    status: "Ausente",
+  },
 ];
 
-function DemoGuide({page,onNext}:{page:Page;onNext:()=>void}){
-  const guide=demoGuides[page]??demoGuides["Hoje"];
-  return <section className="demo-guide"><div className="demo-guide-icon"><FileText/></div><div><span>Tutorial desta aba</span><h2>{guide.title}</h2><p>{guide.description}</p><ul>{guide.items.map(item=><li key={item}><Check/>{item}</li>)}</ul></div><Button variant="outline" onClick={onNext}>Próxima aba<ChevronRight/></Button></section>
+function DemoGuide({ page, onNext }: { page: Page; onNext: () => void }) {
+  const guide = demoGuides[page] ?? demoGuides["Hoje"];
+  return (
+    <section className="demo-guide">
+      <div className="demo-guide-icon">
+        <FileText />
+      </div>
+      <div>
+        <span>Tutorial desta aba</span>
+        <h2>{guide.title}</h2>
+        <p>{guide.description}</p>
+        <ul>
+          {guide.items.map((item) => (
+            <li key={item}>
+              <Check />
+              {item}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <Button variant="outline" onClick={onNext}>
+        Próxima aba
+        <ChevronRight />
+      </Button>
+    </section>
+  );
 }
 
-function DemoContent({page,onBlocked}:{page:Page;onBlocked:(action:string)=>void}){
-  const [reportKind,setReportKind]=useState("Resumo geral");
-  const [person,setPerson]=useState("Todos os colaboradores");
-  const [reportWizardStep,setReportWizardStep]=useState(1);
-  const today=dateKeyInZone(new Date());
-  if(page==="Hoje")return <><PageHead title="Hoje" desc="Visão demonstrativa da operação em tempo real"/><section className="metrics">{[["24","Funcionários ativos","Equipe cadastrada"],["18","Registros hoje","75% da equipe"],["2","Pendências","Aguardando análise"],["3","Setores ativos","Estrutura da empresa"]].map((m,i)=><article key={m[1]}><span className={"metric-mark m"+i}/><div><b>{m[0]}</b><p>{m[1]}</p><small>{m[2]}</small></div></article>)}</section><section className="surface demo-activity"><header><div><h2>Movimentação recente</h2><p>Exemplo de registros recebidos hoje.</p></div><Badge color="green">Atualizado</Badge></header>{[["Ana Souza","Entrada","08:03"],["Bruno Lima","Entrada","08:11"],["Carla Mendes","Justificativa enviada","08:24"]].map(item=><div key={item[0]}><span className="avatar">{initials(item[0])}</span><p><b>{item[0]}</b><small>{item[1]}</small></p><time>{item[2]}</time></div>)}</section></>;
-  if(page==="Funcionários")return <><PageHead title="Funcionários" desc="Pessoas, acessos e vínculos da empresa" action={<Button onClick={()=>onBlocked("Cadastrar funcionário")}><Plus/>Novo funcionário</Button>}/><section className="surface table-surface responsive-table"><Table><TableHeader><TableRow><TableHead>Colaborador</TableHead><TableHead>Matrícula</TableHead><TableHead>Setor</TableHead><TableHead>Cargo</TableHead><TableHead>Situação</TableHead><TableHead>Ações</TableHead></TableRow></TableHeader><TableBody>{demoEmployees.map(row=><TableRow key={row.code}><TableCell><b>{row.name}</b></TableCell><TableCell>{row.code}</TableCell><TableCell>{row.department}</TableCell><TableCell>{row.job}</TableCell><TableCell><Badge color={row.status==="Presente"?"green":row.status==="Justificada"?"blue":"amber"}>{row.status}</Badge></TableCell><TableCell><Button size="sm" variant="outline" onClick={()=>onBlocked("Editar ficha")}>Ver ficha</Button></TableCell></TableRow>)}</TableBody></Table></section></>;
-  if(page==="Dispositivos")return <><PageHead title="Dispositivos" desc="Celulares vinculados às contas"/><section className="demo-card-grid">{[["Ana Souza","Samsung Galaxy A54","Android · ativo"],["Bruno Lima","Motorola G84","Android · ativo"],["Carla Mendes","iPhone 14","iOS · acesso web"]].map(item=><article className="surface demo-info-card" key={item[0]}><Smartphone/><div><h3>{item[1]}</h3><p>{item[0]}</p><small>{item[2]}</small></div><Button size="sm" variant="outline" onClick={()=>onBlocked("Revogar dispositivo")}>Revogar</Button></article>)}</section></>;
-  if(page==="Terminais")return <><PageHead title="Terminais" desc="Relógios compartilhados nos locais de trabalho" action={<Button onClick={()=>onBlocked("Cadastrar terminal")}><Plus/>Novo terminal</Button>}/><section className="demo-card-grid">{[["Recepção","Administrativo","Online"],["Fábrica 01","Operações","Online"]].map(item=><article className="surface demo-info-card" key={item[0]}><RadioTower/><div><h3>{item[0]}</h3><p>Setor: {item[1]}</p><Badge color="green">{item[2]}</Badge></div><Button size="sm" variant="outline" onClick={()=>onBlocked("Editar terminal")}>Configurar</Button></article>)}</section></>;
-  if(page==="Setores e líderes")return <><PageHead title="Setores e líderes" desc="Responsáveis e equipes por área" action={<Button onClick={()=>onBlocked("Criar setor")}><Plus/>Novo setor</Button>}/><section className="sector-cards">{[["Administrativo","Marina Costa","6 pessoas"],["Operações","João Ribeiro","12 pessoas"],["Comercial","Patrícia Nunes","6 pessoas"]].map(item=><article className="surface demo-sector" key={item[0]}><span><UsersRound/></span><h3>{item[0]}</h3><p>Líder: <b>{item[1]}</b></p><small>{item[2]}</small><Button variant="outline" onClick={()=>onBlocked("Editar setor")}>Ver equipe</Button></article>)}</section></>;
-  if(page==="Chamada")return <><PageHead title="Chamada" desc={`Operações · ${dateLabel(today)}`}/><section className="surface demo-call"><header><div><h2>Equipe de Operações</h2><p>Chamada demonstrativa — 4 colaboradores</p></div><Button onClick={()=>onBlocked("Salvar chamada")}><ClipboardCheck/>Salvar chamada</Button></header>{demoEmployees.filter(e=>e.department==="Operações").concat(demoEmployees.slice(0,2)).map((row,index)=><div key={row.code+index}><span className="avatar">{initials(row.name)}</span><p><b>{row.name}</b><small>{row.code}</small></p><div className="demo-call-options"><button className={index!==1?"selected":""} onClick={()=>onBlocked("Alterar presença")}>Presente</button><button className={index===1?"selected absent":""} onClick={()=>onBlocked("Alterar presença")}>Ausente</button><button onClick={()=>onBlocked("Alterar presença")}>Justificada</button></div></div>)}</section></>;
-  if(page==="Jornadas")return <><PageHead title="Jornadas" desc="Carga horária e regras de apuração" action={<Button onClick={()=>onBlocked("Criar jornada")}><Plus/>Nova jornada</Button>}/><section className="demo-card-grid">{[["Jornada flexível 44h","44h semanais · 8h diárias","Entrada e saída livres; apuração pelo total diário."],["Comercial 40h","40h semanais · 8h diárias","Segunda a sexta, com 1h de intervalo."]].map(item=><article className="surface demo-schedule" key={item[0]}><Clock3/><h3>{item[0]}</h3><b>{item[1]}</b><p>{item[2]}</p><Button variant="outline" onClick={()=>onBlocked("Editar jornada")}>Editar regras</Button></article>)}</section></>;
-  if(page==="Banco de horas")return <><PageHead title="Banco de horas" desc="Créditos, débitos e adicionais da equipe"/><section className="metrics overtime-demo-metrics">{[["+42h 30min","Saldo da equipe","Banco acumulado"],["18h 20min","Hora extra 50%","No período"],["7h 40min","Hora extra 100%","Domingos e feriados"],["−4h 10min","Débitos","A compensar"]].map((item,index)=><article key={item[1]}><span className={"metric-mark m"+index}/><div><b>{item[0]}</b><p>{item[1]}</p><small>{item[2]}</small></div></article>)}</section><section className="surface table-surface responsive-table"><Table><TableHeader><TableRow><TableHead>Colaborador</TableHead><TableHead>Regra</TableHead><TableHead>Extra 50%</TableHead><TableHead>Extra 100%</TableHead><TableHead>Saldo</TableHead><TableHead>Ação</TableHead></TableRow></TableHeader><TableBody>{demoEmployees.map((row,index)=><TableRow key={row.code}><TableCell><b>{row.name}</b><br/><small>{row.code}</small></TableCell><TableCell>{index===2?"Pagamento em folha":"Banco de horas"}</TableCell><TableCell>{index+2}h 20min</TableCell><TableCell>{index===0?"2h 00min":"—"}</TableCell><TableCell><Badge color={index===3?"amber":"green"}>{index===3?"−3h 10min":`+${index+5}h 40min`}</Badge></TableCell><TableCell><Button size="sm" variant="outline" onClick={()=>onBlocked("Abrir extrato")}>Ver extrato</Button></TableCell></TableRow>)}</TableBody></Table></section></>;
-  if(page==="Conferência")return <><PageHead title="Conferência" desc="Revisão dos pontos antes do fechamento"/><section className="surface table-surface responsive-table"><Table><TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Colaborador</TableHead><TableHead>Registro</TableHead><TableHead>Método</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{[["Hoje","Ana Souza","Entrada · 08:03","Aplicativo","Confirmado"],["Hoje","Bruno Lima","Entrada · 08:11","QR Code","Pendente"],["Ontem","Carla Mendes","Saída · 17:42","Aplicativo","Confirmado"]].map(row=><TableRow key={row.join()}>{row.map((cell,i)=><TableCell key={cell}>{i===4?<Badge color={cell==="Confirmado"?"green":"amber"}>{cell}</Badge>:cell}</TableCell>)}</TableRow>)}</TableBody></Table></section></>;
-  if(page==="Ocorrências")return <><PageHead title="Ocorrências" desc="Justificativas e ajustes solicitados"/><section className="surface table-surface responsive-table"><Table><TableHeader><TableRow><TableHead>Colaborador</TableHead><TableHead>Tipo</TableHead><TableHead>Período</TableHead><TableHead>Status</TableHead><TableHead>Ação</TableHead></TableRow></TableHeader><TableBody>{[["Carla Mendes","Atestado médico","12/09/2026","Pendente"],["Diego Alves","Esquecimento de ponto","11/09/2026","Aprovada"]].map(row=><TableRow key={row[0]}><TableCell><b>{row[0]}</b></TableCell><TableCell>{row[1]}</TableCell><TableCell>{row[2]}</TableCell><TableCell><Badge color={row[3]==="Aprovada"?"green":"amber"}>{row[3]}</Badge></TableCell><TableCell><Button size="sm" variant="outline" onClick={()=>onBlocked("Analisar ocorrência")}>Analisar</Button></TableCell></TableRow>)}</TableBody></Table></section></>;
-  if(page==="Relatórios")return <><PageHead title="Relatórios" desc="Escolha o relatório em um fluxo guiado e simples"/><section className="surface demo-report-wizard"><div className="report-wizard-progress"><span style={{width:(reportWizardStep/4*100)+"%"}}/></div><div className="report-wizard-step-label"><small>ETAPA {reportWizardStep} DE 4</small><b>{reportWizardStep===1?"Escolha o relatório":reportWizardStep===2?"Defina o escopo":reportWizardStep===3?"Informe os detalhes":"Confira antes de gerar"}</b></div>{reportWizardStep===1&&<div className="report-wizard-kinds">{["Resumo geral","Presenças","Faltas","Horas extras e banco","Ficha de empregado"].map((title,index)=>{const Icon=index===4?FileText:index===3?History:index===2?CircleAlert:index===1?UserCheck:FileSpreadsheet;return <button type="button" key={title} className={reportKind===title?"active":""} onClick={()=>{setReportKind(title);if(title==="Ficha de empregado")setPerson("Ana Souza")}}><Icon/><span><b>{title}</b><small>{title==="Ficha de empregado"?"PDF cadastral preenchido por funcionário.":"Consulta demonstrativa para o RH."}</small></span>{reportKind===title&&<Check/>}</button>})}</div>}{reportWizardStep===2&&<div className="report-wizard-scope"><button type="button" disabled={reportKind==="Ficha de empregado"} className={person==="Todos os colaboradores"?"active":""} onClick={()=>setPerson("Todos os colaboradores")}><UsersRound/><span><b>Relatório geral</b><small>Todos os colaboradores da empresa.</small></span></button><button type="button" className={person!=="Todos os colaboradores"?"active":""} onClick={()=>setPerson("Ana Souza")}><UserRound/><span><b>Funcionário específico</b><small>Uma pessoa escolhida pela equipe de RH.</small></span></button></div>}{reportWizardStep===3&&<div className="report-wizard-details">{person!=="Todos os colaboradores"&&<label>Funcionário<select value={person} onChange={event=>setPerson(event.target.value)}>{demoEmployees.map(employee=><option key={employee.code}>{employee.name}</option>)}</select></label>}{reportKind!=="Ficha de empregado"&&<div className="report-wizard-dates"><label>Data inicial<Input type="date" defaultValue={shiftDateKey(today,-30)}/></label><label>Data final<Input type="date" defaultValue={today}/></label></div>}</div>}{reportWizardStep===4&&<div className="report-wizard-review"><span><Check/></span><h2>Consulta pronta para montar</h2><dl><div><dt>Relatório</dt><dd>{reportKind}</dd></div><div><dt>Escopo</dt><dd>{person}</dd></div><div><dt>Saída</dt><dd>{reportKind==="Ficha de empregado"?"Ficha preenchida em PDF":"Tabela, PDF ou Excel"}</dd></div></dl></div>}<footer className="report-wizard-actions"><Button variant="outline" disabled={reportWizardStep===1} onClick={()=>setReportWizardStep(step=>Math.max(1,step-1))}><ChevronLeft/>Voltar</Button><small>Experimente as quatro etapas.</small>{reportWizardStep<4?<Button onClick={()=>setReportWizardStep(step=>Math.min(4,step+1))}>Continuar<ChevronRight/></Button>:<Button onClick={()=>onBlocked(reportKind==="Ficha de empregado"?"Exportar ficha":"Gerar relatório")}><FileText/>{reportKind==="Ficha de empregado"?"Exportar ficha":"Gerar relatório"}</Button>}</footer></section>{reportWizardStep===4&&reportKind!=="Ficha de empregado"&&<section className="surface table-surface responsive-table"><Table><TableHeader><TableRow><TableHead>Colaborador</TableHead><TableHead>Setor</TableHead><TableHead>Presenças</TableHead><TableHead>Faltas</TableHead><TableHead>Saldo</TableHead></TableRow></TableHeader><TableBody>{demoEmployees.filter(row=>person==="Todos os colaboradores"||row.name===person).map((row,i)=><TableRow key={row.code}><TableCell><b>{row.name}</b></TableCell><TableCell>{row.department}</TableCell><TableCell>{20-i}</TableCell><TableCell>{i===3?1:0}</TableCell><TableCell>{i===3?"−8h 00min":"+1h 20min"}</TableCell></TableRow>)}</TableBody></Table></section>}</>;
-  if(page==="Métodos de ponto")return <><PageHead title="Métodos de ponto" desc="Canais autorizados para registrar a jornada"/><section className="methods">{[["Botão no aplicativo","Registro pessoal no celular autorizado",Smartphone,true],["QR Code individual","Código exclusivo na ficha do colaborador",QrCode,true],["Reconhecimento facial","Exige fornecedor homologado de prova de vida",UserRound,false],["Relógio biométrico","Integração com equipamento compatível",Fingerprint,false]].map(([title,desc,Icon,enabled]:any)=><article className="surface demo-method" key={title}><span><Icon/></span><div><h3>{title}</h3><p>{desc}</p></div><Switch checked={enabled} onCheckedChange={()=>onBlocked("Alterar método")}/></article>)}</section></>;
-  return <><PageHead title="Configurações" desc="Identificação e acesso da empresa"/><form className="surface settings-form demo-settings" onSubmit={e=>{e.preventDefault();onBlocked("Salvar configurações")}}><label>Código da empresa<Input value="NORTE01" readOnly/><small>Usado por todos no login.</small></label><label>Nome fantasia<Input value="Empresa Exemplo Norte" readOnly/></label><label>Razão social<Input value="Empresa Exemplo Norte Ltda." readOnly/></label><label>Fuso horário<Input value="America/Sao_Paulo" readOnly/></label><Button>Salvar alterações</Button></form></>;
+function DemoContent({
+  page,
+  onBlocked,
+}: {
+  page: Page;
+  onBlocked: (action: string) => void;
+}) {
+  const [reportKind, setReportKind] = useState("Resumo geral");
+  const [person, setPerson] = useState("Todos os colaboradores");
+  const [reportWizardStep, setReportWizardStep] = useState(1);
+  const today = dateKeyInZone(new Date());
+  if (page === "Hoje")
+    return (
+      <>
+        <PageHead
+          title="Hoje"
+          desc="Visão demonstrativa da operação em tempo real"
+        />
+        <section className="metrics">
+          {[
+            ["24", "Funcionários ativos", "Equipe cadastrada"],
+            ["18", "Registros hoje", "75% da equipe"],
+            ["2", "Pendências", "Aguardando análise"],
+            ["3", "Setores ativos", "Estrutura da empresa"],
+          ].map((m, i) => (
+            <article key={m[1]}>
+              <span className={"metric-mark m" + i} />
+              <div>
+                <b>{m[0]}</b>
+                <p>{m[1]}</p>
+                <small>{m[2]}</small>
+              </div>
+            </article>
+          ))}
+        </section>
+        <section className="surface demo-activity">
+          <header>
+            <div>
+              <h2>Movimentação recente</h2>
+              <p>Exemplo de registros recebidos hoje.</p>
+            </div>
+            <Badge color="green">Atualizado</Badge>
+          </header>
+          {[
+            ["Ana Souza", "Entrada", "08:03"],
+            ["Bruno Lima", "Entrada", "08:11"],
+            ["Carla Mendes", "Justificativa enviada", "08:24"],
+          ].map((item) => (
+            <div key={item[0]}>
+              <span className="avatar">{initials(item[0])}</span>
+              <p>
+                <b>{item[0]}</b>
+                <small>{item[1]}</small>
+              </p>
+              <time>{item[2]}</time>
+            </div>
+          ))}
+        </section>
+      </>
+    );
+  if (page === "Funcionários")
+    return (
+      <>
+        <PageHead
+          title="Funcionários"
+          desc="Pessoas, acessos e vínculos da empresa"
+          action={
+            <Button onClick={() => onBlocked("Cadastrar funcionário")}>
+              <Plus />
+              Novo funcionário
+            </Button>
+          }
+        />
+        <section className="surface table-surface responsive-table">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Colaborador</TableHead>
+                <TableHead>Matrícula</TableHead>
+                <TableHead>Setor</TableHead>
+                <TableHead>Cargo</TableHead>
+                <TableHead>Situação</TableHead>
+                <TableHead>Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {demoEmployees.map((row) => (
+                <TableRow key={row.code}>
+                  <TableCell>
+                    <b>{row.name}</b>
+                  </TableCell>
+                  <TableCell>{row.code}</TableCell>
+                  <TableCell>{row.department}</TableCell>
+                  <TableCell>{row.job}</TableCell>
+                  <TableCell>
+                    <Badge
+                      color={
+                        row.status === "Presente"
+                          ? "green"
+                          : row.status === "Justificada"
+                            ? "blue"
+                            : "amber"
+                      }
+                    >
+                      {row.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onBlocked("Editar ficha")}
+                    >
+                      Ver ficha
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </section>
+      </>
+    );
+  if (page === "Dispositivos")
+    return (
+      <>
+        <PageHead title="Dispositivos" desc="Celulares vinculados às contas" />
+        <section className="demo-card-grid">
+          {[
+            ["Ana Souza", "Samsung Galaxy A54", "Android · ativo"],
+            ["Bruno Lima", "Motorola G84", "Android · ativo"],
+            ["Carla Mendes", "iPhone 14", "iOS · acesso web"],
+          ].map((item) => (
+            <article className="surface demo-info-card" key={item[0]}>
+              <Smartphone />
+              <div>
+                <h3>{item[1]}</h3>
+                <p>{item[0]}</p>
+                <small>{item[2]}</small>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onBlocked("Revogar dispositivo")}
+              >
+                Revogar
+              </Button>
+            </article>
+          ))}
+        </section>
+      </>
+    );
+  if (page === "Terminais")
+    return (
+      <>
+        <PageHead
+          title="Terminais"
+          desc="Relógios compartilhados nos locais de trabalho"
+          action={
+            <Button onClick={() => onBlocked("Cadastrar terminal")}>
+              <Plus />
+              Novo terminal
+            </Button>
+          }
+        />
+        <section className="demo-card-grid">
+          {[
+            ["Recepção", "Administrativo", "Online"],
+            ["Fábrica 01", "Operações", "Online"],
+          ].map((item) => (
+            <article className="surface demo-info-card" key={item[0]}>
+              <RadioTower />
+              <div>
+                <h3>{item[0]}</h3>
+                <p>Setor: {item[1]}</p>
+                <Badge color="green">{item[2]}</Badge>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onBlocked("Editar terminal")}
+              >
+                Configurar
+              </Button>
+            </article>
+          ))}
+        </section>
+      </>
+    );
+  if (page === "Setores e líderes")
+    return (
+      <>
+        <PageHead
+          title="Setores e líderes"
+          desc="Responsáveis e equipes por área"
+          action={
+            <Button onClick={() => onBlocked("Criar setor")}>
+              <Plus />
+              Novo setor
+            </Button>
+          }
+        />
+        <section className="sector-cards">
+          {[
+            ["Administrativo", "Marina Costa", "6 pessoas"],
+            ["Operações", "João Ribeiro", "12 pessoas"],
+            ["Comercial", "Patrícia Nunes", "6 pessoas"],
+          ].map((item) => (
+            <article className="surface demo-sector" key={item[0]}>
+              <span>
+                <UsersRound />
+              </span>
+              <h3>{item[0]}</h3>
+              <p>
+                Líder: <b>{item[1]}</b>
+              </p>
+              <small>{item[2]}</small>
+              <Button
+                variant="outline"
+                onClick={() => onBlocked("Editar setor")}
+              >
+                Ver equipe
+              </Button>
+            </article>
+          ))}
+        </section>
+      </>
+    );
+  if (page === "Chamada")
+    return (
+      <>
+        <PageHead title="Chamada" desc={`Operações · ${dateLabel(today)}`} />
+        <section className="surface demo-call">
+          <header>
+            <div>
+              <h2>Equipe de Operações</h2>
+              <p>Chamada demonstrativa — 4 colaboradores</p>
+            </div>
+            <Button onClick={() => onBlocked("Salvar chamada")}>
+              <ClipboardCheck />
+              Salvar chamada
+            </Button>
+          </header>
+          {demoEmployees
+            .filter((e) => e.department === "Operações")
+            .concat(demoEmployees.slice(0, 2))
+            .map((row, index) => (
+              <div key={row.code + index}>
+                <span className="avatar">{initials(row.name)}</span>
+                <p>
+                  <b>{row.name}</b>
+                  <small>{row.code}</small>
+                </p>
+                <div className="demo-call-options">
+                  <button
+                    className={index !== 1 ? "selected" : ""}
+                    onClick={() => onBlocked("Alterar presença")}
+                  >
+                    Presente
+                  </button>
+                  <button
+                    className={index === 1 ? "selected absent" : ""}
+                    onClick={() => onBlocked("Alterar presença")}
+                  >
+                    Ausente
+                  </button>
+                  <button onClick={() => onBlocked("Alterar presença")}>
+                    Justificada
+                  </button>
+                </div>
+              </div>
+            ))}
+        </section>
+      </>
+    );
+  if (page === "Jornadas")
+    return (
+      <>
+        <PageHead
+          title="Jornadas"
+          desc="Carga horária e regras de apuração"
+          action={
+            <Button onClick={() => onBlocked("Criar jornada")}>
+              <Plus />
+              Nova jornada
+            </Button>
+          }
+        />
+        <section className="demo-card-grid">
+          {[
+            [
+              "Jornada flexível 44h",
+              "44h semanais · 8h diárias",
+              "Entrada e saída livres; apuração pelo total diário.",
+            ],
+            [
+              "Comercial 40h",
+              "40h semanais · 8h diárias",
+              "Segunda a sexta, com 1h de intervalo.",
+            ],
+          ].map((item) => (
+            <article className="surface demo-schedule" key={item[0]}>
+              <Clock3 />
+              <h3>{item[0]}</h3>
+              <b>{item[1]}</b>
+              <p>{item[2]}</p>
+              <Button
+                variant="outline"
+                onClick={() => onBlocked("Editar jornada")}
+              >
+                Editar regras
+              </Button>
+            </article>
+          ))}
+        </section>
+      </>
+    );
+  if (page === "Banco de horas")
+    return (
+      <>
+        <PageHead
+          title="Banco de horas"
+          desc="Créditos, débitos e adicionais da equipe"
+        />
+        <section className="metrics overtime-demo-metrics">
+          {[
+            ["+42h 30min", "Saldo da equipe", "Banco acumulado"],
+            ["18h 20min", "Hora extra 50%", "No período"],
+            ["7h 40min", "Hora extra 100%", "Domingos e feriados"],
+            ["−4h 10min", "Débitos", "A compensar"],
+          ].map((item, index) => (
+            <article key={item[1]}>
+              <span className={"metric-mark m" + index} />
+              <div>
+                <b>{item[0]}</b>
+                <p>{item[1]}</p>
+                <small>{item[2]}</small>
+              </div>
+            </article>
+          ))}
+        </section>
+        <section className="surface table-surface responsive-table">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Colaborador</TableHead>
+                <TableHead>Regra</TableHead>
+                <TableHead>Extra 50%</TableHead>
+                <TableHead>Extra 100%</TableHead>
+                <TableHead>Saldo</TableHead>
+                <TableHead>Ação</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {demoEmployees.map((row, index) => (
+                <TableRow key={row.code}>
+                  <TableCell>
+                    <b>{row.name}</b>
+                    <br />
+                    <small>{row.code}</small>
+                  </TableCell>
+                  <TableCell>
+                    {index === 2 ? "Pagamento em folha" : "Banco de horas"}
+                  </TableCell>
+                  <TableCell>{index + 2}h 20min</TableCell>
+                  <TableCell>{index === 0 ? "2h 00min" : "—"}</TableCell>
+                  <TableCell>
+                    <Badge color={index === 3 ? "amber" : "green"}>
+                      {index === 3 ? "−3h 10min" : `+${index + 5}h 40min`}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onBlocked("Abrir extrato")}
+                    >
+                      Ver extrato
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </section>
+      </>
+    );
+  if (page === "Conferência")
+    return (
+      <>
+        <PageHead
+          title="Conferência"
+          desc="Revisão dos pontos antes do fechamento"
+        />
+        <section className="surface table-surface responsive-table">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Data</TableHead>
+                <TableHead>Colaborador</TableHead>
+                <TableHead>Registro</TableHead>
+                <TableHead>Método</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[
+                [
+                  "Hoje",
+                  "Ana Souza",
+                  "Entrada · 08:03",
+                  "Aplicativo",
+                  "Confirmado",
+                ],
+                [
+                  "Hoje",
+                  "Bruno Lima",
+                  "Entrada · 08:11",
+                  "QR Code",
+                  "Pendente",
+                ],
+                [
+                  "Ontem",
+                  "Carla Mendes",
+                  "Saída · 17:42",
+                  "Aplicativo",
+                  "Confirmado",
+                ],
+              ].map((row) => (
+                <TableRow key={row.join()}>
+                  {row.map((cell, i) => (
+                    <TableCell key={cell}>
+                      {i === 4 ? (
+                        <Badge
+                          color={cell === "Confirmado" ? "green" : "amber"}
+                        >
+                          {cell}
+                        </Badge>
+                      ) : (
+                        cell
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </section>
+      </>
+    );
+  if (page === "Ocorrências")
+    return (
+      <>
+        <PageHead
+          title="Ocorrências"
+          desc="Justificativas e ajustes solicitados"
+        />
+        <section className="surface table-surface responsive-table">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Colaborador</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Período</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Ação</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[
+                ["Carla Mendes", "Atestado médico", "12/09/2026", "Pendente"],
+                [
+                  "Diego Alves",
+                  "Esquecimento de ponto",
+                  "11/09/2026",
+                  "Aprovada",
+                ],
+              ].map((row) => (
+                <TableRow key={row[0]}>
+                  <TableCell>
+                    <b>{row[0]}</b>
+                  </TableCell>
+                  <TableCell>{row[1]}</TableCell>
+                  <TableCell>{row[2]}</TableCell>
+                  <TableCell>
+                    <Badge color={row[3] === "Aprovada" ? "green" : "amber"}>
+                      {row[3]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onBlocked("Analisar ocorrência")}
+                    >
+                      Analisar
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </section>
+      </>
+    );
+  if (page === "Relatórios")
+    return (
+      <>
+        <PageHead
+          title="Relatórios"
+          desc="Escolha o relatório em um fluxo guiado e simples"
+        />
+        <section className="surface demo-report-wizard">
+          <div className="report-wizard-progress">
+            <span style={{ width: (reportWizardStep / 4) * 100 + "%" }} />
+          </div>
+          <div className="report-wizard-step-label">
+            <small>ETAPA {reportWizardStep} DE 4</small>
+            <b>
+              {reportWizardStep === 1
+                ? "Escolha o relatório"
+                : reportWizardStep === 2
+                  ? "Defina o escopo"
+                  : reportWizardStep === 3
+                    ? "Informe os detalhes"
+                    : "Confira antes de gerar"}
+            </b>
+          </div>
+          {reportWizardStep === 1 && (
+            <div className="report-wizard-kinds">
+              {[
+                "Resumo geral",
+                "Presenças",
+                "Faltas",
+                "Horas extras e banco",
+                "Ficha de empregado",
+              ].map((title, index) => {
+                const Icon =
+                  index === 4
+                    ? FileText
+                    : index === 3
+                      ? History
+                      : index === 2
+                        ? CircleAlert
+                        : index === 1
+                          ? UserCheck
+                          : FileSpreadsheet;
+                return (
+                  <button
+                    type="button"
+                    key={title}
+                    className={reportKind === title ? "active" : ""}
+                    onClick={() => {
+                      setReportKind(title);
+                      if (title === "Ficha de empregado")
+                        setPerson("Ana Souza");
+                    }}
+                  >
+                    <Icon />
+                    <span>
+                      <b>{title}</b>
+                      <small>
+                        {title === "Ficha de empregado"
+                          ? "PDF cadastral preenchido por funcionário."
+                          : "Consulta demonstrativa para o RH."}
+                      </small>
+                    </span>
+                    {reportKind === title && <Check />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {reportWizardStep === 2 && (
+            <div className="report-wizard-scope">
+              <button
+                type="button"
+                disabled={reportKind === "Ficha de empregado"}
+                className={person === "Todos os colaboradores" ? "active" : ""}
+                onClick={() => setPerson("Todos os colaboradores")}
+              >
+                <UsersRound />
+                <span>
+                  <b>Relatório geral</b>
+                  <small>Todos os colaboradores da empresa.</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                className={person !== "Todos os colaboradores" ? "active" : ""}
+                onClick={() => setPerson("Ana Souza")}
+              >
+                <UserRound />
+                <span>
+                  <b>Funcionário específico</b>
+                  <small>Uma pessoa escolhida pela equipe de RH.</small>
+                </span>
+              </button>
+            </div>
+          )}
+          {reportWizardStep === 3 && (
+            <div className="report-wizard-details">
+              {person !== "Todos os colaboradores" && (
+                <label>
+                  Funcionário
+                  <select
+                    value={person}
+                    onChange={(event) => setPerson(event.target.value)}
+                  >
+                    {demoEmployees.map((employee) => (
+                      <option key={employee.code}>{employee.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {reportKind !== "Ficha de empregado" && (
+                <div className="report-wizard-dates">
+                  <label>
+                    Data inicial
+                    <Input
+                      type="date"
+                      defaultValue={shiftDateKey(today, -30)}
+                    />
+                  </label>
+                  <label>
+                    Data final
+                    <Input type="date" defaultValue={today} />
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+          {reportWizardStep === 4 && (
+            <div className="report-wizard-review">
+              <span>
+                <Check />
+              </span>
+              <h2>Consulta pronta para montar</h2>
+              <dl>
+                <div>
+                  <dt>Relatório</dt>
+                  <dd>{reportKind}</dd>
+                </div>
+                <div>
+                  <dt>Escopo</dt>
+                  <dd>{person}</dd>
+                </div>
+                <div>
+                  <dt>Saída</dt>
+                  <dd>
+                    {reportKind === "Ficha de empregado"
+                      ? "Ficha preenchida em PDF"
+                      : "Tabela, PDF ou Excel"}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          )}
+          <footer className="report-wizard-actions">
+            <Button
+              variant="outline"
+              disabled={reportWizardStep === 1}
+              onClick={() =>
+                setReportWizardStep((step) => Math.max(1, step - 1))
+              }
+            >
+              <ChevronLeft />
+              Voltar
+            </Button>
+            <small>Experimente as quatro etapas.</small>
+            {reportWizardStep < 4 ? (
+              <Button
+                onClick={() =>
+                  setReportWizardStep((step) => Math.min(4, step + 1))
+                }
+              >
+                Continuar
+                <ChevronRight />
+              </Button>
+            ) : (
+              <Button
+                onClick={() =>
+                  onBlocked(
+                    reportKind === "Ficha de empregado"
+                      ? "Exportar ficha"
+                      : "Gerar relatório",
+                  )
+                }
+              >
+                <FileText />
+                {reportKind === "Ficha de empregado"
+                  ? "Exportar ficha"
+                  : "Gerar relatório"}
+              </Button>
+            )}
+          </footer>
+        </section>
+        {reportWizardStep === 4 && reportKind !== "Ficha de empregado" && (
+          <section className="surface table-surface responsive-table">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Colaborador</TableHead>
+                  <TableHead>Setor</TableHead>
+                  <TableHead>Presenças</TableHead>
+                  <TableHead>Faltas</TableHead>
+                  <TableHead>Saldo</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {demoEmployees
+                  .filter(
+                    (row) =>
+                      person === "Todos os colaboradores" ||
+                      row.name === person,
+                  )
+                  .map((row, i) => (
+                    <TableRow key={row.code}>
+                      <TableCell>
+                        <b>{row.name}</b>
+                      </TableCell>
+                      <TableCell>{row.department}</TableCell>
+                      <TableCell>{20 - i}</TableCell>
+                      <TableCell>{i === 3 ? 1 : 0}</TableCell>
+                      <TableCell>
+                        {i === 3 ? "−8h 00min" : "+1h 20min"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </section>
+        )}
+      </>
+    );
+  if (page === "Métodos de ponto")
+    return (
+      <>
+        <PageHead
+          title="Métodos de ponto"
+          desc="Canais autorizados para registrar a jornada"
+        />
+        <section className="methods">
+          {[
+            [
+              "Botão no aplicativo",
+              "Registro pessoal no celular autorizado",
+              Smartphone,
+              true,
+            ],
+            [
+              "QR Code individual",
+              "Código exclusivo na ficha do colaborador",
+              QrCode,
+              true,
+            ],
+            [
+              "Reconhecimento facial",
+              "Exige fornecedor homologado de prova de vida",
+              UserRound,
+              false,
+            ],
+            [
+              "Relógio biométrico",
+              "Integração com equipamento compatível",
+              Fingerprint,
+              false,
+            ],
+          ].map(([title, desc, Icon, enabled]: any) => (
+            <article className="surface demo-method" key={title}>
+              <span>
+                <Icon />
+              </span>
+              <div>
+                <h3>{title}</h3>
+                <p>{desc}</p>
+              </div>
+              <Switch
+                checked={enabled}
+                onCheckedChange={() => onBlocked("Alterar método")}
+              />
+            </article>
+          ))}
+        </section>
+      </>
+    );
+  return (
+    <>
+      <PageHead
+        title="Configurações"
+        desc="Identificação e acesso da empresa"
+      />
+      <form
+        className="surface settings-form demo-settings"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onBlocked("Salvar configurações");
+        }}
+      >
+        <label>
+          Código da empresa
+          <Input value="NORTE01" readOnly />
+          <small>Usado por todos no login.</small>
+        </label>
+        <label>
+          Nome fantasia
+          <Input value="Empresa Exemplo Norte" readOnly />
+        </label>
+        <label>
+          Razão social
+          <Input value="Empresa Exemplo Norte Ltda." readOnly />
+        </label>
+        <label>
+          Fuso horário
+          <Input value="America/Sao_Paulo" readOnly />
+        </label>
+        <Button>Salvar alterações</Button>
+      </form>
+    </>
+  );
 }
 
-function DemoApp({onExit}:{onExit:()=>void}){
-  const [page,setPage]=useState<Page>("Hoje");const[demoMounted,setDemoMounted]=useState(false);const[drawer,setDrawer]=useState(false);const[welcome,setWelcome]=useState(true);const[notice,setNotice]=useState("");
-  useEffect(()=>{const id=location.hash.replace("#demo-","");const initial=(Object.entries(pageIds) as [Page,string][]).find(([,value])=>value===id)?.[0];if(initial)setPage(initial);setDemoMounted(true)},[]);
-  useEffect(()=>{if(demoMounted)history.replaceState(null,"",`#demo-${pageIds[page]}`)},[demoMounted,page]);
-  const nextPage=()=>{const index=demoMenu.findIndex(([name])=>name===page);const next=demoMenu[(index+1)%demoMenu.length][0];setPage(next);setDrawer(false);if(typeof window!=="undefined")window.scrollTo({top:0,behavior:"smooth"})};
-  const blocked=(action:string)=>{setNotice(`${action} está bloqueado no modo demonstração. Entre ou cadastre uma empresa para usar dados reais.`);setTimeout(()=>setNotice(""),4200)};
-  return <main className="admin-shell demo-shell"><aside className={"side "+(drawer?"open":"")}><header><Brand/><button onClick={()=>setDrawer(false)}><X/></button></header><button className="company-switch"><span>DE</span><p><b>Empresa Exemplo Norte</b><small>NORTE01 · demonstração</small></p><ChevronDown/></button><nav>{demoMenu.map(([name,I])=><button className={page===name?"active":""} key={name} onClick={()=>{setPage(name);setDrawer(false)}}><I/><span>{name}</span></button>)}</nav><footer><span className="avatar">RH</span><p><b>Visitante</b><small>Visão da equipe de RH</small></p><button className="icon-plain" onClick={onExit} aria-label="Sair da demonstração"><LogOut/></button></footer></aside>{drawer&&<button className="scrim" onClick={()=>setDrawer(false)}/>}<section className="admin-main"><div className="demo-ribbon"><ShieldCheck/><span><b>Modo demonstração</b> · dados fictícios e alterações bloqueadas</span><button onClick={()=>setWelcome(true)}>Ver introdução</button><button onClick={onExit}>Sair da demo</button></div><header className="appbar demo-appbar"><div><button className="menu-button" onClick={()=>setDrawer(true)}><Menu/></button><span><b>Empresa Exemplo Norte</b><small>{page}</small></span></div><aside><Badge color="blue">Somente leitura</Badge></aside></header>{notice&&<div className="demo-toast"><ShieldCheck/>{notice}<button onClick={()=>setNotice("")}><X/></button></div>}<div key={page} className="admin-content page-fade"><DemoGuide page={page} onNext={nextPage}/><DemoContent page={page} onBlocked={blocked}/></div><nav className="mobile-admin-nav demo-mobile-nav" aria-label="Navegação da demonstração">{demoMenu.filter(([name])=>["Hoje","Funcionários","Chamada","Relatórios"].includes(name)).map(([name,I])=><button key={name} className={page===name?"active":""} onClick={()=>setPage(name)}><span><I/></span><small>{name}</small></button>)}</nav></section>{welcome&&<div className="demo-welcome" role="dialog" aria-modal="true" aria-labelledby="demo-title"><section><button className="demo-welcome-close" onClick={()=>setWelcome(false)} aria-label="Fechar"><X/></button><span className="demo-welcome-mark"><LayoutDashboard/></span><small>VISITA GUIADA</small><h1 id="demo-title">Conheça o PontoNorte</h1><p>Navegue por uma empresa fictícia e entenda como o RH organiza pessoas, jornadas, chamadas, ocorrências e relatórios.</p><div className="demo-welcome-grid"><article><ShieldCheck/><b>Seguro</b><span>Nenhum dado real é usado.</span></article><article><Menu/><b>Todas as abas</b><span>Explore o painel completo.</span></article><article><FileText/><b>Tutorial contínuo</b><span>Cada tela explica sua função.</span></article></div><div className="demo-welcome-note"><CircleAlert/><span>Cadastros, exclusões, ativações e exportações reais ficam bloqueados nesta visita.</span></div><Button onClick={()=>setWelcome(false)}>Começar visita<ChevronRight/></Button><a className="demo-manual-link" href="https://github.com/Delta-1/PontoNorte/blob/main/docs/MANUAL_COMPLETO.md" target="_blank" rel="noreferrer">Consultar manual completo</a></section></div>}</main>
+function DemoApp({ onExit }: { onExit: () => void }) {
+  const [page, setPage] = useState<Page>("Hoje");
+  const [demoMounted, setDemoMounted] = useState(false);
+  const [drawer, setDrawer] = useState(false);
+  const [welcome, setWelcome] = useState(true);
+  const [notice, setNotice] = useState("");
+  useEffect(() => {
+    const id = location.hash.replace("#demo-", "");
+    const initial = (Object.entries(pageIds) as [Page, string][]).find(
+      ([, value]) => value === id,
+    )?.[0];
+    if (initial) setPage(initial);
+    setDemoMounted(true);
+  }, []);
+  useEffect(() => {
+    if (demoMounted) history.replaceState(null, "", `#demo-${pageIds[page]}`);
+  }, [demoMounted, page]);
+  const nextPage = () => {
+    const index = demoMenu.findIndex(([name]) => name === page);
+    const next = demoMenu[(index + 1) % demoMenu.length][0];
+    setPage(next);
+    setDrawer(false);
+    if (typeof window !== "undefined")
+      window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const blocked = (action: string) => {
+    setNotice(
+      `${action} está bloqueado no modo demonstração. Entre ou cadastre uma empresa para usar dados reais.`,
+    );
+    setTimeout(() => setNotice(""), 4200);
+  };
+  return (
+    <main className="admin-shell demo-shell">
+      <aside className={"side " + (drawer ? "open" : "")}>
+        <header>
+          <Brand />
+          <button onClick={() => setDrawer(false)}>
+            <X />
+          </button>
+        </header>
+        <button className="company-switch">
+          <span>DE</span>
+          <p>
+            <b>Empresa Exemplo Norte</b>
+            <small>NORTE01 · demonstração</small>
+          </p>
+          <ChevronDown />
+        </button>
+        <nav>
+          {demoMenu.map(([name, I]) => (
+            <button
+              className={page === name ? "active" : ""}
+              key={name}
+              onClick={() => {
+                setPage(name);
+                setDrawer(false);
+              }}
+            >
+              <I />
+              <span>{name}</span>
+            </button>
+          ))}
+        </nav>
+        <footer>
+          <span className="avatar">RH</span>
+          <p>
+            <b>Visitante</b>
+            <small>Visão da equipe de RH</small>
+          </p>
+          <button
+            className="icon-plain"
+            onClick={onExit}
+            aria-label="Sair da demonstração"
+          >
+            <LogOut />
+          </button>
+        </footer>
+      </aside>
+      {drawer && <button className="scrim" onClick={() => setDrawer(false)} />}
+      <section className="admin-main">
+        <div className="demo-ribbon">
+          <ShieldCheck />
+          <span>
+            <b>Modo demonstração</b> · dados fictícios e alterações bloqueadas
+          </span>
+          <button onClick={() => setWelcome(true)}>Ver introdução</button>
+          <button onClick={onExit}>Sair da demo</button>
+        </div>
+        <header className="appbar demo-appbar">
+          <div>
+            <button className="menu-button" onClick={() => setDrawer(true)}>
+              <Menu />
+            </button>
+            <span>
+              <b>Empresa Exemplo Norte</b>
+              <small>{page}</small>
+            </span>
+          </div>
+          <aside>
+            <Badge color="blue">Somente leitura</Badge>
+          </aside>
+        </header>
+        {notice && (
+          <div className="demo-toast">
+            <ShieldCheck />
+            {notice}
+            <button onClick={() => setNotice("")}>
+              <X />
+            </button>
+          </div>
+        )}
+        <div key={page} className="admin-content page-fade">
+          <DemoGuide page={page} onNext={nextPage} />
+          <DemoContent page={page} onBlocked={blocked} />
+        </div>
+        <nav
+          className="mobile-admin-nav demo-mobile-nav"
+          aria-label="Navegação da demonstração"
+        >
+          {demoMenu
+            .filter(([name]) =>
+              ["Hoje", "Funcionários", "Chamada", "Relatórios"].includes(name),
+            )
+            .map(([name, I]) => (
+              <button
+                key={name}
+                className={page === name ? "active" : ""}
+                onClick={() => setPage(name)}
+              >
+                <span>
+                  <I />
+                </span>
+                <small>{name}</small>
+              </button>
+            ))}
+        </nav>
+      </section>
+      {welcome && (
+        <div
+          className="demo-welcome"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="demo-title"
+        >
+          <section>
+            <button
+              className="demo-welcome-close"
+              onClick={() => setWelcome(false)}
+              aria-label="Fechar"
+            >
+              <X />
+            </button>
+            <span className="demo-welcome-mark">
+              <LayoutDashboard />
+            </span>
+            <small>VISITA GUIADA</small>
+            <h1 id="demo-title">Conheça o PontoNorte</h1>
+            <p>
+              Navegue por uma empresa fictícia e entenda como o RH organiza
+              pessoas, jornadas, chamadas, ocorrências e relatórios.
+            </p>
+            <div className="demo-welcome-grid">
+              <article>
+                <ShieldCheck />
+                <b>Seguro</b>
+                <span>Nenhum dado real é usado.</span>
+              </article>
+              <article>
+                <Menu />
+                <b>Todas as abas</b>
+                <span>Explore o painel completo.</span>
+              </article>
+              <article>
+                <FileText />
+                <b>Tutorial contínuo</b>
+                <span>Cada tela explica sua função.</span>
+              </article>
+            </div>
+            <div className="demo-welcome-note">
+              <CircleAlert />
+              <span>
+                Cadastros, exclusões, ativações e exportações reais ficam
+                bloqueados nesta visita.
+              </span>
+            </div>
+            <Button onClick={() => setWelcome(false)}>
+              Começar visita
+              <ChevronRight />
+            </Button>
+            <a
+              className="demo-manual-link"
+              href="https://github.com/Delta-1/PontoNorte/blob/main/docs/MANUAL_COMPLETO.md"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Consultar manual completo
+            </a>
+          </section>
+        </div>
+      )}
+    </main>
+  );
 }
 
-type EmployeeWebTab="clock"|"history"|"justify"|"profile";
-function WebQrScanner({onRead,onClose}:{onRead:(value:string)=>void;onClose:()=>void}){
-  const[error,setError]=useState("");const video=useRef<HTMLVideoElement>(null);
-  useEffect(()=>{let active=true;let frame=0;let stream:MediaStream|undefined;(async()=>{try{const Detector=(globalThis as any).BarcodeDetector;if(!Detector)throw new Error("Leitor indisponível neste navegador. Use o botão de ponto ou o aplicativo Android.");stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});if(!active)return;if(video.current){video.current.srcObject=stream;await video.current.play()}const detector=new Detector({formats:["qr_code"]});const scan=async()=>{if(!active||!video.current)return;try{const codes=await detector.detect(video.current);if(codes[0]?.rawValue){active=false;onRead(codes[0].rawValue);return}}catch{}frame=requestAnimationFrame(scan)};scan()}catch(reason){setError(reason instanceof Error?reason.message:"Não foi possível abrir a câmera.")}})();return()=>{active=false;cancelAnimationFrame(frame);stream?.getTracks().forEach(track=>track.stop())}},[onRead]);
-  return <div className="web-qr-overlay"><section className="web-qr-sheet"><header><div><b>Ler QR individual</b><small>Aponte a câmera para o código da sua ficha.</small></div><button onClick={onClose} aria-label="Fechar leitor"><X/></button></header><div className="web-native-reader"><video ref={video} muted playsInline/><span><QrCode/></span></div>{error&&<ErrorBox message={error}/>}</section></div>
+type EmployeeWebTab = "clock" | "history" | "justify" | "profile";
+function WebQrScanner({
+  onRead,
+  onClose,
+}: {
+  onRead: (value: string) => void;
+  onClose: () => void;
+}) {
+  const [error, setError] = useState("");
+  const video = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    let active = true;
+    let frame = 0;
+    let stream: MediaStream | undefined;
+    (async () => {
+      try {
+        const Detector = (globalThis as any).BarcodeDetector;
+        if (!Detector)
+          throw new Error(
+            "Leitor indisponível neste navegador. Use o botão de ponto ou o aplicativo Android.",
+          );
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+        if (!active) return;
+        if (video.current) {
+          video.current.srcObject = stream;
+          await video.current.play();
+        }
+        const detector = new Detector({ formats: ["qr_code"] });
+        const scan = async () => {
+          if (!active || !video.current) return;
+          try {
+            const codes = await detector.detect(video.current);
+            if (codes[0]?.rawValue) {
+              active = false;
+              onRead(codes[0].rawValue);
+              return;
+            }
+          } catch {}
+          frame = requestAnimationFrame(scan);
+        };
+        scan();
+      } catch (reason) {
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Não foi possível abrir a câmera.",
+        );
+      }
+    })();
+    return () => {
+      active = false;
+      cancelAnimationFrame(frame);
+      stream?.getTracks().forEach((track) => track.stop());
+    };
+  }, [onRead]);
+  return (
+    <div className="web-qr-overlay">
+      <section className="web-qr-sheet">
+        <header>
+          <div>
+            <b>Ler QR individual</b>
+            <small>Aponte a câmera para o código da sua ficha.</small>
+          </div>
+          <button onClick={onClose} aria-label="Fechar leitor">
+            <X />
+          </button>
+        </header>
+        <div className="web-native-reader">
+          <video ref={video} muted playsInline />
+          <span>
+            <QrCode />
+          </span>
+        </div>
+        {error && <ErrorBox message={error} />}
+      </section>
+    </div>
+  );
 }
-function EmployeeWebNav({tab,setTab}:{tab:EmployeeWebTab;setTab:(tab:EmployeeWebTab)=>void}){
-  const options:[EmployeeWebTab,string,React.ComponentType<{className?:string}>][]=[["clock","Ponto",Clock3],["history","Histórico",History],["justify","Justificar",FileCheck2],["profile","Perfil",UserRound]];
-  return <nav className="mobile-nav web-employee-nav">{options.map(([id,label,Icon])=><button key={id} className={tab===id?"active":""} onClick={()=>setTab(id)}><span><Icon/></span><small>{label}</small></button>)}</nav>
+function EmployeeWebNav({
+  tab,
+  setTab,
+}: {
+  tab: EmployeeWebTab;
+  setTab: (tab: EmployeeWebTab) => void;
+}) {
+  const options: [
+    EmployeeWebTab,
+    string,
+    React.ComponentType<{ className?: string }>,
+  ][] = [
+    ["clock", "Ponto", Clock3],
+    ["history", "Histórico", History],
+    ["justify", "Justificar", FileCheck2],
+    ["profile", "Perfil", UserRound],
+  ];
+  return (
+    <nav className="mobile-nav web-employee-nav">
+      {options.map(([id, label, Icon]) => (
+        <button
+          key={id}
+          className={tab === id ? "active" : ""}
+          onClick={() => setTab(id)}
+        >
+          <span>
+            <Icon />
+          </span>
+          <small>{label}</small>
+        </button>
+      ))}
+    </nav>
+  );
 }
-function EmployeeWeb({ctx,onRefresh}:{ctx:Context;onRefresh:()=>void}){
-  const[tab,setTab]=useState<EmployeeWebTab>(()=>{if(typeof window==="undefined")return "clock";return(localStorage.getItem("pontonorte_employee_web_tab") as EmployeeWebTab)||"clock"});const[entries,setEntries]=useState<any[]>([]);const[methods,setMethods]=useState<any[]>([]);const[justifications,setJustifications]=useState<any[]>([]);const[bankBalance,setBankBalance]=useState<any>(null);const[busy,setBusy]=useState("");const[message,setMessage]=useState("");const[scanner,setScanner]=useState(false);const[editing,setEditing]=useState(false);const[profile,setProfile]=useState({job_title:ctx.employee.job_title??"",cbo_code:formatCbo(ctx.employee.cbo_code),cbo_title:ctx.employee.cbo_title??"",phone:ctx.employee.phone??"",email:ctx.employee.email??""});const[occurrence,setOccurrence]=useState({kind:"Atestado médico",reason:"",starts_at:"",ends_at:""});
-  const deviceId=useMemo(()=>{if(typeof window==="undefined")return"web";let value=localStorage.getItem("pontonorte_web_device_id");if(!value){value=crypto.randomUUID();localStorage.setItem("pontonorte_web_device_id",value)}return value},[]);
-  const load=useCallback(async()=>{const start=new Date();start.setHours(0,0,0,0);const[m,e,j,b]=await Promise.all([supabase.from("clock_methods").select("*").eq("organization_id",ctx.organization.id),supabase.from("time_entries").select("*").eq("employee_id",ctx.employee.id).gte("occurred_at",start.toISOString()).order("occurred_at"),supabase.from("justifications").select("*").eq("employee_id",ctx.employee.id).order("created_at",{ascending:false}).limit(20),supabase.from("employee_time_bank_balance").select("*").eq("employee_id",ctx.employee.id).maybeSingle()]);setMethods(m.data??[]);setEntries(e.data??[]);setJustifications(j.data??[]);setBankBalance(b.data??null)},[ctx.employee.id,ctx.organization.id]);
-  useEffect(()=>{localStorage.setItem("pontonorte_employee_web_tab",tab)},[tab]);useEffect(()=>{load()},[load]);
-  useEffect(()=>{(async()=>{const{data}=await supabase.from("authorized_devices").select("id").eq("organization_id",ctx.organization.id).eq("device_uuid",deviceId).maybeSingle();if(!data)await supabase.from("authorized_devices").insert({organization_id:ctx.organization.id,employee_id:ctx.employee.id,device_uuid:deviceId,device_name:"Navegador do celular",platform:navigator.platform||"web",app_version:"web-mobile-1.2.0"})})()},[ctx.employee.id,ctx.organization.id,deviceId]);
-  async function position(required:boolean){if(!required)return{};if(!navigator.geolocation)throw new Error("Este navegador não oferece localização.");return await new Promise<Record<string,number>>((resolve,reject)=>navigator.geolocation.getCurrentPosition(value=>resolve({latitude:value.coords.latitude,longitude:value.coords.longitude,accuracy_meters:value.coords.accuracy}),()=>reject(new Error("Autorize a localização para registrar o ponto.")),{enableHighAccuracy:true,timeout:15000}))}
-  async function record(methodName:"mobile"|"qr_code",qr_token?:string){setBusy(methodName);setMessage("");setScanner(false);try{const method=methods.find(item=>item.method===methodName&&item.enabled);if(!method)throw new Error("Este método não está habilitado pela empresa.");const coords=await position(Boolean(method.require_location));const{data,error}=await supabase.functions.invoke("clock-event",{body:{method:methodName,qr_token,client_event_id:crypto.randomUUID(),device_uuid:deviceId,app_version:"web-mobile-1.2.0",...coords}});if(error)throw new Error(await functionErrorMessage(error,"Não foi possível registrar o ponto."));setMessage(`${eventLabels[data.entry.event_type]} registrada às ${dateTime(data.entry.occurred_at).split(" ").at(-1)}.`);await load()}catch(reason){setMessage(reason instanceof Error?reason.message:"Não foi possível registrar o ponto.")}finally{setBusy("")}}
-  async function saveProfile(e:FormEvent){e.preventDefault();setBusy("profile");setMessage("");const{error}=await supabase.functions.invoke("manage-user",{body:{...profile,action:"update",organization_id:ctx.organization.id,employee_id:ctx.employee.id,cbo_code:normalizeCbo(profile.cbo_code)}});setBusy("");if(error)return setMessage(await functionErrorMessage(error,"Não foi possível atualizar seu perfil."));setEditing(false);setMessage("Perfil atualizado com sucesso.");onRefresh()}
-  async function submitOccurrence(e:FormEvent){e.preventDefault();setBusy("occurrence");setMessage("");const{data:{user}}=await supabase.auth.getUser();const{error}=await supabase.from("justifications").insert({organization_id:ctx.organization.id,employee_id:ctx.employee.id,kind:occurrence.kind,reason:occurrence.reason,starts_at:new Date(occurrence.starts_at).toISOString(),ends_at:new Date(occurrence.ends_at).toISOString(),created_by:user?.id});setBusy("");if(error)return setMessage(error.message);setOccurrence({kind:"Atestado médico",reason:"",starts_at:"",ends_at:""});setMessage("Justificativa enviada ao RH.");load()}
-  async function logout(){await supabase.auth.signOut();location.reload()}
-  const next=["entry","break_start","break_end","exit"][Math.min(entries.length,3)];
-  return <main className="mobile-stage employee-web-stage"><section className="phone employee-app employee-web-app"><header className="mobile-top"><Brand/><span className="avatar">{initials(ctx.employee.full_name)}</span></header><div key={tab} className="mobile-body page-fade">{tab==="clock"&&<><p className="greeting">Olá, {ctx.employee.full_name.split(" ")[0]}</p><h1>Seu dia de trabalho</h1><article className="clock-card"><header><span><CalendarDays/> Hoje</span><i className="online-badge"><i/>Online</i></header><time>{new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit"}).format(new Date())}</time><p>Próximo registro: <b>{eventLabels[next]}</b></p><div className="web-clock-actions">{methods.some(item=>item.method==="mobile"&&item.enabled)&&<button onClick={()=>record("mobile")} disabled={!!busy||entries.length>=4}><Smartphone/>{busy==="mobile"?"Registrando…":"Tocar para registrar"}</button>}{methods.some(item=>item.method==="qr_code"&&item.enabled)&&<button onClick={()=>setScanner(true)} disabled={!!busy||entries.length>=4}><QrCode/>Ler meu QR Code</button>}</div></article>{message&&<div className={message.includes("registrada")?"success-banner":"form-error"}>{message}</div>}<article className="today-card"><header><h2>Registros de hoje</h2><Badge color="blue">{entries.length}/4</Badge></header>{["entry","break_start","break_end","exit"].map(type=>{const item=entries.find(entry=>entry.event_type===type);return <div className={item?"day-line":"day-line muted"} key={type}><span>{item&&<Check/>}</span><p><b>{eventLabels[type]}</b><small>{item?methodLabels[item.method]:"Ainda não registrado"}</small></p><time>{item?dateTime(item.occurred_at).split(" ").at(-1):"—"}</time></div>})}</article><div className="mobile-note"><MapPin/><p><b>Validação protegida</b><small>A localização só é solicitada quando a regra da empresa exige.</small></p></div></>}{tab==="history"&&<><h1>Meus pontos</h1><p className="page-mobile-subtitle">Histórico de hoje</p><article className="today-card">{entries.length?entries.map(item=><div className="day-line" key={item.id}><span><Check/></span><p><b>{eventLabels[item.event_type]}</b><small>{methodLabels[item.method]}</small></p><time>{dateTime(item.occurred_at).split(" ").at(-1)}</time></div>):<div className="employee-web-empty"><History/><p>Nenhum registro hoje.</p></div>}</article></>}{tab==="justify"&&<><h1>Justificativas</h1>{message&&<div className={message.includes("enviada")?"success-banner":"form-error"}>{message}</div>}<form className="today-card employee-web-form" onSubmit={submitOccurrence}><label>Tipo<select value={occurrence.kind} onChange={e=>setOccurrence({...occurrence,kind:e.target.value})}><option>Atestado médico</option><option>Declaração</option><option>Esquecimento de ponto</option><option>Outro</option></select></label><label>Motivo<textarea required value={occurrence.reason} onChange={e=>setOccurrence({...occurrence,reason:e.target.value})}/></label><label>Início<Input required type="datetime-local" value={occurrence.starts_at} onChange={e=>setOccurrence({...occurrence,starts_at:e.target.value})}/></label><label>Fim<Input required type="datetime-local" value={occurrence.ends_at} onChange={e=>setOccurrence({...occurrence,ends_at:e.target.value})}/></label><Button disabled={busy==="occurrence"}><FileCheck2/>{busy==="occurrence"?"Enviando…":"Enviar ao RH"}</Button></form><section className="employee-web-requests">{justifications.map(item=><article className="today-card" key={item.id}><b>{item.kind}</b><small>{dateTime(item.starts_at)} · {item.status}</small></article>)}</section></>}{tab==="profile"&&<><div className="employee-web-profile-head"><div><h1>Meu perfil</h1><p>{ctx.employee.job_title||"Funcionário"}</p></div><button onClick={()=>setEditing(value=>!value)}><Pencil/>{editing?"Fechar":"Editar"}</button></div>{message&&<div className={message.includes("sucesso")?"success-banner":"form-error"}>{message}</div>}{editing?<form className="today-card employee-web-form" onSubmit={saveProfile}><label>Cargo<Input value={profile.job_title} onChange={e=>setProfile({...profile,job_title:e.target.value})}/></label><label>Código CBO<Input list="employee-web-cbo" inputMode="numeric" value={profile.cbo_code} onChange={e=>{const code=formatCbo(e.target.value);setProfile({...profile,cbo_code:code,cbo_title:cboTitleFor(code)||profile.cbo_title})}}/></label><label>Função CBO<Input value={profile.cbo_title} onChange={e=>setProfile({...profile,cbo_title:e.target.value})}/></label><datalist id="employee-web-cbo">{commonCboOptions.map(item=><option key={item.code} value={formatCbo(item.code)}>{item.title}</option>)}</datalist><label>Telefone<Input value={profile.phone} onChange={e=>setProfile({...profile,phone:e.target.value})}/></label><label>E-mail<Input type="email" value={profile.email} onChange={e=>setProfile({...profile,email:e.target.value})}/></label><Button disabled={busy==="profile"}>Salvar alterações</Button></form>:<article className="today-card employee-web-profile"><span className="avatar">{initials(ctx.employee.full_name)}</span><h2>{ctx.employee.full_name}</h2><dl><div><dt>Matrícula</dt><dd>{ctx.employee.employee_code}</dd></div><div><dt>Empresa</dt><dd>{ctx.organization.trade_name}</dd></div><div><dt>CBO</dt><dd>{ctx.employee.cbo_code?formatCbo(ctx.employee.cbo_code):"Não informado"}</dd></div><div><dt>Função</dt><dd>{ctx.employee.cbo_title||"Não informada"}</dd></div><div><dt>Horas extras</dt><dd>{overtimeModeLabels[ctx.employee.overtime_mode]??"Banco de horas"}</dd></div><div><dt>Saldo do banco</dt><dd className={Number(bankBalance?.balance_minutes??0)>=0?"positive-balance":"negative-balance"}>{minutes(Number(bankBalance?.balance_minutes??0))}</dd></div></dl><Button variant="outline" onClick={logout}><LogOut/>Sair</Button></article>}</>}</div><EmployeeWebNav tab={tab} setTab={setTab}/></section>{scanner&&<WebQrScanner onRead={value=>record("qr_code",value)} onClose={()=>setScanner(false)}/>}</main>
-}
-
-function Admin({ctx,onRefresh}:{ctx:Context;onRefresh:()=>void}){
-  const [page,setPage]=useState<Page>(()=>{if(typeof window==="undefined")return "Hoje";const fromHash=(Object.entries(pageIds) as [Page,string][]).find(([,id])=>id===location.hash.slice(1))?.[0];const stored=localStorage.getItem("pontonorte_admin_page") as Page|null;return fromHash??(stored&&pageIds[stored]?stored:"Hoje")});const[drawer,setDrawer]=useState(false);
-  const visible=useMemo(()=>menu.filter(([name])=>{
-    if(name==="Empresas"||name==="Cobranças")return ctx.member.role==="platform_admin";
-    if(ctx.member.role==="manager")return ["Hoje","Funcionários","Dispositivos","Chamada","Banco de horas","Conferência","Ocorrências","Relatórios","Configurações"].includes(name);
-    return ctx.member.role!=="employee";
-  }),[ctx.member.role]);
-  useEffect(()=>{if(!visible.some(([name])=>name===page)){setPage("Hoje");return}localStorage.setItem("pontonorte_admin_page",page);history.replaceState(null,"",`#${pageIds[page]}`)},[page,visible]);
-  useEffect(()=>{const sync=()=>{const next=(Object.entries(pageIds) as [Page,string][]).find(([,id])=>id===location.hash.slice(1))?.[0];if(next&&visible.some(([name])=>name===next))setPage(next)};addEventListener("hashchange",sync);return()=>removeEventListener("hashchange",sync)},[visible]);
-  const mobilePages=useMemo(()=>visible.filter(([name])=>["Hoje","Funcionários","Chamada","Relatórios"].includes(name)),[visible]);
-  async function logout(){await supabase.auth.signOut();location.reload()}
-  return <main className="admin-shell"><aside className={"side "+(drawer?"open":"")}><header><Brand/><button onClick={()=>setDrawer(false)}><X/></button></header><button className="company-switch"><span>{initials(ctx.organization.trade_name)}</span><p><b>{ctx.organization.trade_name}</b><small>{ctx.organization.company_code}</small></p><ChevronDown/></button><nav>{visible.map(([name,I])=><button className={page===name?"active":""} key={name} onClick={()=>{setPage(name);setDrawer(false)}}><I/><span>{name}</span></button>)}</nav><footer><span className="avatar">{initials(ctx.employee.full_name)}</span><p><b>{ctx.employee.full_name}</b><small>{labels[ctx.member.role]}</small></p><button className="icon-plain" onClick={logout}><LogOut/></button></footer></aside>{drawer&&<button className="scrim" onClick={()=>setDrawer(false)}/>}<section className="admin-main"><header className="appbar"><div><button className="menu-button" onClick={()=>setDrawer(true)}><Menu/></button><span><b>{ctx.organization.trade_name}</b><small>{page}</small></span></div><aside><button className="notify"><Bell/></button></aside></header><div key={page} className="admin-content page-fade">{page==="Hoje"&&<Dashboard ctx={ctx}/>} {page==="Funcionários"&&<Employees ctx={ctx}/>} {page==="Dispositivos"&&<Devices ctx={ctx}/>} {page==="Terminais"&&<Terminals ctx={ctx}/>} {page==="Setores e líderes"&&<Departments ctx={ctx}/>} {page==="Chamada"&&<RollCall ctx={ctx}/>} {page==="Jornadas"&&<Schedules ctx={ctx}/>} {page==="Banco de horas"&&<TimeBank ctx={ctx}/>} {page==="Conferência"&&<ReviewEntries ctx={ctx}/>} {page==="Ocorrências"&&<Occurrences ctx={ctx}/>} {page==="Relatórios"&&<Reports ctx={ctx}/>} {page==="Métodos de ponto"&&<Methods ctx={ctx}/>} {page==="Empresas"&&<Companies ctx={ctx}/>} {page==="Cobranças"&&<Billing ctx={ctx}/>} {page==="Configurações"&&<Configuration ctx={ctx} onRefresh={onRefresh}/>}</div><nav className="mobile-admin-nav" aria-label="Navegação principal">{mobilePages.map(([name,I])=><button key={name} className={page===name?"active":""} onClick={()=>setPage(name)}><span><I/></span><small>{name}</small></button>)}</nav></section></main>
-}
-
-export default function Home(){
-  const [ctx,setCtx]=useState<Context|null>(null);const[loading,setLoading]=useState(true);const[error,setError]=useState("");const[demo,setDemo]=useState(false);
-  const load=useCallback(async()=>{
-    setLoading(true);setError("");
-    const {data:{user}}=await supabase.auth.getUser();
-    if(!user){setCtx(null);setLoading(false);return}
-    const [memberResult,employeeResult]=await Promise.all([
-      supabase.from("organization_members").select("*,organizations(*)").eq("user_id",user.id).eq("active",true).limit(1).single(),
-      supabase.from("employees").select("*").eq("auth_user_id",user.id).single(),
+function EmployeeWeb({
+  ctx,
+  onRefresh,
+}: {
+  ctx: Context;
+  onRefresh: () => void;
+}) {
+  const [tab, setTab] = useState<EmployeeWebTab>(() => {
+    if (typeof window === "undefined") return "clock";
+    return (
+      (localStorage.getItem("pontonorte_employee_web_tab") as EmployeeWebTab) ||
+      "clock"
+    );
+  });
+  const [entries, setEntries] = useState<any[]>([]);
+  const [methods, setMethods] = useState<any[]>([]);
+  const [justifications, setJustifications] = useState<any[]>([]);
+  const [bankBalance, setBankBalance] = useState<any>(null);
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
+  const [scanner, setScanner] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [profile, setProfile] = useState({
+    job_title: ctx.employee.job_title ?? "",
+    cbo_code: formatCbo(ctx.employee.cbo_code),
+    cbo_title: ctx.employee.cbo_title ?? "",
+    phone: ctx.employee.phone ?? "",
+    email: ctx.employee.email ?? "",
+  });
+  const [occurrence, setOccurrence] = useState({
+    kind: "Atestado médico",
+    reason: "",
+    starts_at: "",
+    ends_at: "",
+  });
+  const deviceId = useMemo(() => {
+    if (typeof window === "undefined") return "web";
+    let value = localStorage.getItem("pontonorte_web_device_id");
+    if (!value) {
+      value = crypto.randomUUID();
+      localStorage.setItem("pontonorte_web_device_id", value);
+    }
+    return value;
+  }, []);
+  const load = useCallback(async () => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const [m, e, j, b] = await Promise.all([
+      supabase
+        .from("clock_methods")
+        .select("*")
+        .eq("organization_id", ctx.organization.id),
+      supabase
+        .from("time_entries")
+        .select("*")
+        .eq("employee_id", ctx.employee.id)
+        .gte("occurred_at", start.toISOString())
+        .order("occurred_at"),
+      supabase
+        .from("justifications")
+        .select("*")
+        .eq("employee_id", ctx.employee.id)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("employee_time_bank_balance")
+        .select("*")
+        .eq("employee_id", ctx.employee.id)
+        .maybeSingle(),
     ]);
-    if(memberResult.error||employeeResult.error){setError("Seu usuário não possui um vínculo ativo.");setLoading(false);return}
-    const{data:employeeRecord}=await supabase.from("employee_records").select("id,data").eq("employee_id",employeeResult.data.id).eq("template_key","registro_empregado_br").maybeSingle();
-    setCtx({member:memberResult.data,employee:employeeResult.data,organization:memberResult.data.organizations,employeeRecord:employeeRecord??null});setLoading(false);
-  },[]);
-  useEffect(()=>{if(location.hash.startsWith("#demo-"))setDemo(true);load();const{data}=supabase.auth.onAuthStateChange((_event,session)=>{if(!session){setCtx(null);setLoading(false)}else setTimeout(load,0)});return()=>data.subscription.unsubscribe()},[load]);
-  if(demo)return <DemoApp onExit={()=>{setDemo(false);history.replaceState(null,"",location.pathname)}}/>;
-  if(loading)return <main className="auth-stage"><RefreshCw className="spin"/></main>;
-  if(error)return <main className="auth-stage"><section className="auth-card"><Brand/><ErrorBox message={error}/><Button onClick={()=>supabase.auth.signOut().then(()=>location.reload())}>Voltar ao login</Button></section></main>;
-  if(!ctx)return <Login onLogin={load} onDemo={()=>{history.replaceState(null,"","#demo-hoje");setDemo(true)}}/>;
-  if(ctx.employee.must_change_password)return <ChangePassword employee={ctx.employee} onDone={load}/>;
-  if(ctx.member.role!=="platform_admin"&&!licenseActive(ctx.organization))return <LicenseActivation ctx={ctx} onDone={load}/>;
-  if(ctx.member.role==="employee"&&!ctx.employeeRecord?.data?.self_onboarding?.completed_at)return <EmployeeOnboarding employee={ctx.employee} organization={ctx.organization} onDone={load}/>;
-  if(ctx.member.role==="employee")return <EmployeeWeb ctx={ctx} onRefresh={load}/>;
-  return <Admin ctx={ctx} onRefresh={load}/>;
+    setMethods(m.data ?? []);
+    setEntries(e.data ?? []);
+    setJustifications(j.data ?? []);
+    setBankBalance(b.data ?? null);
+  }, [ctx.employee.id, ctx.organization.id]);
+  useEffect(() => {
+    localStorage.setItem("pontonorte_employee_web_tab", tab);
+  }, [tab]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("authorized_devices")
+        .select("id")
+        .eq("organization_id", ctx.organization.id)
+        .eq("device_uuid", deviceId)
+        .maybeSingle();
+      if (!data)
+        await supabase
+          .from("authorized_devices")
+          .insert({
+            organization_id: ctx.organization.id,
+            employee_id: ctx.employee.id,
+            device_uuid: deviceId,
+            device_name: "Navegador do celular",
+            platform: navigator.platform || "web",
+            app_version: "web-mobile-1.2.0",
+          });
+    })();
+  }, [ctx.employee.id, ctx.organization.id, deviceId]);
+  async function position(required: boolean) {
+    if (!required) return {};
+    if (!navigator.geolocation)
+      throw new Error("Este navegador não oferece localização.");
+    return await new Promise<Record<string, number>>((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(
+        (value) =>
+          resolve({
+            latitude: value.coords.latitude,
+            longitude: value.coords.longitude,
+            accuracy_meters: value.coords.accuracy,
+          }),
+        () =>
+          reject(new Error("Autorize a localização para registrar o ponto.")),
+        { enableHighAccuracy: true, timeout: 15000 },
+      ),
+    );
+  }
+  async function record(methodName: "mobile" | "qr_code", qr_token?: string) {
+    setBusy(methodName);
+    setMessage("");
+    setScanner(false);
+    try {
+      const method = methods.find(
+        (item) => item.method === methodName && item.enabled,
+      );
+      if (!method)
+        throw new Error("Este método não está habilitado pela empresa.");
+      const coords = await position(Boolean(method.require_location));
+      const { data, error } = await supabase.functions.invoke("clock-event", {
+        body: {
+          method: methodName,
+          qr_token,
+          client_event_id: crypto.randomUUID(),
+          device_uuid: deviceId,
+          app_version: "web-mobile-1.2.0",
+          ...coords,
+        },
+      });
+      if (error)
+        throw new Error(
+          await functionErrorMessage(
+            error,
+            "Não foi possível registrar o ponto.",
+          ),
+        );
+      setMessage(
+        `${eventLabels[data.entry.event_type]} registrada às ${dateTime(data.entry.occurred_at).split(" ").at(-1)}.`,
+      );
+      await load();
+    } catch (reason) {
+      setMessage(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível registrar o ponto.",
+      );
+    } finally {
+      setBusy("");
+    }
+  }
+  async function saveProfile(e: FormEvent) {
+    e.preventDefault();
+    setBusy("profile");
+    setMessage("");
+    const { error } = await supabase.functions.invoke("manage-user", {
+      body: {
+        ...profile,
+        action: "update",
+        organization_id: ctx.organization.id,
+        employee_id: ctx.employee.id,
+        cbo_code: normalizeCbo(profile.cbo_code),
+      },
+    });
+    setBusy("");
+    if (error)
+      return setMessage(
+        await functionErrorMessage(
+          error,
+          "Não foi possível atualizar seu perfil.",
+        ),
+      );
+    setEditing(false);
+    setMessage("Perfil atualizado com sucesso.");
+    onRefresh();
+  }
+  async function submitOccurrence(e: FormEvent) {
+    e.preventDefault();
+    setBusy("occurrence");
+    setMessage("");
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { error } = await supabase
+      .from("justifications")
+      .insert({
+        organization_id: ctx.organization.id,
+        employee_id: ctx.employee.id,
+        kind: occurrence.kind,
+        reason: occurrence.reason,
+        starts_at: new Date(occurrence.starts_at).toISOString(),
+        ends_at: new Date(occurrence.ends_at).toISOString(),
+        created_by: user?.id,
+      });
+    setBusy("");
+    if (error) return setMessage(error.message);
+    setOccurrence({
+      kind: "Atestado médico",
+      reason: "",
+      starts_at: "",
+      ends_at: "",
+    });
+    setMessage("Justificativa enviada ao RH.");
+    load();
+  }
+  async function logout() {
+    await supabase.auth.signOut();
+    location.reload();
+  }
+  const next = ["entry", "break_start", "break_end", "exit"][
+    Math.min(entries.length, 3)
+  ];
+  return (
+    <main className="mobile-stage employee-web-stage">
+      <section className="phone employee-app employee-web-app">
+        <header className="mobile-top">
+          <Brand />
+          <span className="avatar">{initials(ctx.employee.full_name)}</span>
+        </header>
+        <div key={tab} className="mobile-body page-fade">
+          {tab === "clock" && (
+            <>
+              <p className="greeting">
+                Olá, {ctx.employee.full_name.split(" ")[0]}
+              </p>
+              <h1>Seu dia de trabalho</h1>
+              <article className="clock-card">
+                <header>
+                  <span>
+                    <CalendarDays /> Hoje
+                  </span>
+                  <i className="online-badge">
+                    <i />
+                    Online
+                  </i>
+                </header>
+                <time>
+                  {new Intl.DateTimeFormat("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }).format(new Date())}
+                </time>
+                <p>
+                  Próximo registro: <b>{eventLabels[next]}</b>
+                </p>
+                <div className="web-clock-actions">
+                  {methods.some(
+                    (item) => item.method === "mobile" && item.enabled,
+                  ) && (
+                    <button
+                      onClick={() => record("mobile")}
+                      disabled={!!busy || entries.length >= 4}
+                    >
+                      <Smartphone />
+                      {busy === "mobile"
+                        ? "Registrando…"
+                        : "Tocar para registrar"}
+                    </button>
+                  )}
+                  {methods.some(
+                    (item) => item.method === "qr_code" && item.enabled,
+                  ) && (
+                    <button
+                      onClick={() => setScanner(true)}
+                      disabled={!!busy || entries.length >= 4}
+                    >
+                      <QrCode />
+                      Ler meu QR Code
+                    </button>
+                  )}
+                </div>
+              </article>
+              {message && (
+                <div
+                  className={
+                    message.includes("registrada")
+                      ? "success-banner"
+                      : "form-error"
+                  }
+                >
+                  {message}
+                </div>
+              )}
+              <article className="today-card">
+                <header>
+                  <h2>Registros de hoje</h2>
+                  <Badge color="blue">{entries.length}/4</Badge>
+                </header>
+                {["entry", "break_start", "break_end", "exit"].map((type) => {
+                  const item = entries.find(
+                    (entry) => entry.event_type === type,
+                  );
+                  return (
+                    <div
+                      className={item ? "day-line" : "day-line muted"}
+                      key={type}
+                    >
+                      <span>{item && <Check />}</span>
+                      <p>
+                        <b>{eventLabels[type]}</b>
+                        <small>
+                          {item
+                            ? methodLabels[item.method]
+                            : "Ainda não registrado"}
+                        </small>
+                      </p>
+                      <time>
+                        {item
+                          ? dateTime(item.occurred_at).split(" ").at(-1)
+                          : "—"}
+                      </time>
+                    </div>
+                  );
+                })}
+              </article>
+              <div className="mobile-note">
+                <MapPin />
+                <p>
+                  <b>Validação protegida</b>
+                  <small>
+                    A localização só é solicitada quando a regra da empresa
+                    exige.
+                  </small>
+                </p>
+              </div>
+            </>
+          )}
+          {tab === "history" && (
+            <>
+              <h1>Meus pontos</h1>
+              <p className="page-mobile-subtitle">Histórico de hoje</p>
+              <article className="today-card">
+                {entries.length ? (
+                  entries.map((item) => (
+                    <div className="day-line" key={item.id}>
+                      <span>
+                        <Check />
+                      </span>
+                      <p>
+                        <b>{eventLabels[item.event_type]}</b>
+                        <small>{methodLabels[item.method]}</small>
+                      </p>
+                      <time>
+                        {dateTime(item.occurred_at).split(" ").at(-1)}
+                      </time>
+                    </div>
+                  ))
+                ) : (
+                  <div className="employee-web-empty">
+                    <History />
+                    <p>Nenhum registro hoje.</p>
+                  </div>
+                )}
+              </article>
+            </>
+          )}
+          {tab === "justify" && (
+            <>
+              <h1>Justificativas</h1>
+              {message && (
+                <div
+                  className={
+                    message.includes("enviada")
+                      ? "success-banner"
+                      : "form-error"
+                  }
+                >
+                  {message}
+                </div>
+              )}
+              <form
+                className="today-card employee-web-form"
+                onSubmit={submitOccurrence}
+              >
+                <label>
+                  Tipo
+                  <select
+                    value={occurrence.kind}
+                    onChange={(e) =>
+                      setOccurrence({ ...occurrence, kind: e.target.value })
+                    }
+                  >
+                    <option>Atestado médico</option>
+                    <option>Declaração</option>
+                    <option>Esquecimento de ponto</option>
+                    <option>Outro</option>
+                  </select>
+                </label>
+                <label>
+                  Motivo
+                  <textarea
+                    required
+                    value={occurrence.reason}
+                    onChange={(e) =>
+                      setOccurrence({ ...occurrence, reason: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Início
+                  <Input
+                    required
+                    type="datetime-local"
+                    value={occurrence.starts_at}
+                    onChange={(e) =>
+                      setOccurrence({
+                        ...occurrence,
+                        starts_at: e.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Fim
+                  <Input
+                    required
+                    type="datetime-local"
+                    value={occurrence.ends_at}
+                    onChange={(e) =>
+                      setOccurrence({ ...occurrence, ends_at: e.target.value })
+                    }
+                  />
+                </label>
+                <Button disabled={busy === "occurrence"}>
+                  <FileCheck2 />
+                  {busy === "occurrence" ? "Enviando…" : "Enviar ao RH"}
+                </Button>
+              </form>
+              <section className="employee-web-requests">
+                {justifications.map((item) => (
+                  <article className="today-card" key={item.id}>
+                    <b>{item.kind}</b>
+                    <small>
+                      {dateTime(item.starts_at)} · {item.status}
+                    </small>
+                  </article>
+                ))}
+              </section>
+            </>
+          )}
+          {tab === "profile" && (
+            <>
+              <div className="employee-web-profile-head">
+                <div>
+                  <h1>Meu perfil</h1>
+                  <p>{ctx.employee.job_title || "Funcionário"}</p>
+                </div>
+                <button onClick={() => setEditing((value) => !value)}>
+                  <Pencil />
+                  {editing ? "Fechar" : "Editar"}
+                </button>
+              </div>
+              {message && (
+                <div
+                  className={
+                    message.includes("sucesso")
+                      ? "success-banner"
+                      : "form-error"
+                  }
+                >
+                  {message}
+                </div>
+              )}
+              {editing ? (
+                <form
+                  className="today-card employee-web-form"
+                  onSubmit={saveProfile}
+                >
+                  <label>
+                    Cargo
+                    <Input
+                      value={profile.job_title}
+                      onChange={(e) =>
+                        setProfile({ ...profile, job_title: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Código CBO
+                    <Input
+                      list="employee-web-cbo"
+                      inputMode="numeric"
+                      value={profile.cbo_code}
+                      onChange={(e) => {
+                        const code = formatCbo(e.target.value);
+                        setProfile({
+                          ...profile,
+                          cbo_code: code,
+                          cbo_title: cboTitleFor(code) || profile.cbo_title,
+                        });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Função CBO
+                    <Input
+                      value={profile.cbo_title}
+                      onChange={(e) =>
+                        setProfile({ ...profile, cbo_title: e.target.value })
+                      }
+                    />
+                  </label>
+                  <datalist id="employee-web-cbo">
+                    {commonCboOptions.map((item) => (
+                      <option key={item.code} value={formatCbo(item.code)}>
+                        {item.title}
+                      </option>
+                    ))}
+                  </datalist>
+                  <label>
+                    Telefone
+                    <Input
+                      value={profile.phone}
+                      onChange={(e) =>
+                        setProfile({ ...profile, phone: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    E-mail
+                    <Input
+                      type="email"
+                      value={profile.email}
+                      onChange={(e) =>
+                        setProfile({ ...profile, email: e.target.value })
+                      }
+                    />
+                  </label>
+                  <Button disabled={busy === "profile"}>
+                    Salvar alterações
+                  </Button>
+                </form>
+              ) : (
+                <article className="today-card employee-web-profile">
+                  <span className="avatar">
+                    {initials(ctx.employee.full_name)}
+                  </span>
+                  <h2>{ctx.employee.full_name}</h2>
+                  <dl>
+                    <div>
+                      <dt>Matrícula</dt>
+                      <dd>{ctx.employee.employee_code}</dd>
+                    </div>
+                    <div>
+                      <dt>Empresa</dt>
+                      <dd>{ctx.organization.trade_name}</dd>
+                    </div>
+                    <div>
+                      <dt>CBO</dt>
+                      <dd>
+                        {ctx.employee.cbo_code
+                          ? formatCbo(ctx.employee.cbo_code)
+                          : "Não informado"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Função</dt>
+                      <dd>{ctx.employee.cbo_title || "Não informada"}</dd>
+                    </div>
+                    <div>
+                      <dt>Horas extras</dt>
+                      <dd>
+                        {overtimeModeLabels[ctx.employee.overtime_mode] ??
+                          "Banco de horas"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Saldo do banco</dt>
+                      <dd
+                        className={
+                          Number(bankBalance?.balance_minutes ?? 0) >= 0
+                            ? "positive-balance"
+                            : "negative-balance"
+                        }
+                      >
+                        {minutes(Number(bankBalance?.balance_minutes ?? 0))}
+                      </dd>
+                    </div>
+                  </dl>
+                  <Button variant="outline" onClick={logout}>
+                    <LogOut />
+                    Sair
+                  </Button>
+                </article>
+              )}
+            </>
+          )}
+        </div>
+        <EmployeeWebNav tab={tab} setTab={setTab} />
+      </section>
+      {scanner && (
+        <WebQrScanner
+          onRead={(value) => record("qr_code", value)}
+          onClose={() => setScanner(false)}
+        />
+      )}
+    </main>
+  );
+}
+
+function Admin({ ctx, onRefresh }: { ctx: Context; onRefresh: () => void }) {
+  const [page, setPage] = useState<Page>(() => {
+    if (typeof window === "undefined") return "Hoje";
+    const fromHash = (Object.entries(pageIds) as [Page, string][]).find(
+      ([, id]) => id === location.hash.slice(1),
+    )?.[0];
+    const stored = localStorage.getItem("pontonorte_admin_page") as Page | null;
+    return fromHash ?? (stored && pageIds[stored] ? stored : "Hoje");
+  });
+  const [drawer, setDrawer] = useState(false);
+  const visible = useMemo(
+    () =>
+      menu.filter(([name]) => {
+        if (name === "Empresas" || name === "Cobranças")
+          return ctx.member.role === "platform_admin";
+        if (ctx.member.role === "manager")
+          return [
+            "Hoje",
+            "Funcionários",
+            "Dispositivos",
+            "Chamada",
+            "Banco de horas",
+            "Conferência",
+            "Ocorrências",
+            "Relatórios",
+            "Configurações",
+          ].includes(name);
+        return ctx.member.role !== "employee";
+      }),
+    [ctx.member.role],
+  );
+  useEffect(() => {
+    if (!visible.some(([name]) => name === page)) {
+      setPage("Hoje");
+      return;
+    }
+    localStorage.setItem("pontonorte_admin_page", page);
+    history.replaceState(null, "", `#${pageIds[page]}`);
+  }, [page, visible]);
+  useEffect(() => {
+    const sync = () => {
+      const next = (Object.entries(pageIds) as [Page, string][]).find(
+        ([, id]) => id === location.hash.slice(1),
+      )?.[0];
+      if (next && visible.some(([name]) => name === next)) setPage(next);
+    };
+    addEventListener("hashchange", sync);
+    return () => removeEventListener("hashchange", sync);
+  }, [visible]);
+  const mobilePages = useMemo(
+    () =>
+      visible.filter(([name]) =>
+        ["Hoje", "Funcionários", "Chamada", "Relatórios"].includes(name),
+      ),
+    [visible],
+  );
+  async function logout() {
+    await supabase.auth.signOut();
+    location.reload();
+  }
+  return (
+    <main className="admin-shell">
+      <aside className={"side " + (drawer ? "open" : "")}>
+        <header>
+          <Brand />
+          <button onClick={() => setDrawer(false)}>
+            <X />
+          </button>
+        </header>
+        <button className="company-switch">
+          <span>{initials(ctx.organization.trade_name)}</span>
+          <p>
+            <b>{ctx.organization.trade_name}</b>
+            <small>{ctx.organization.company_code}</small>
+          </p>
+          <ChevronDown />
+        </button>
+        <nav>
+          {visible.map(([name, I]) => (
+            <button
+              className={page === name ? "active" : ""}
+              key={name}
+              onClick={() => {
+                setPage(name);
+                setDrawer(false);
+              }}
+            >
+              <I />
+              <span>{name}</span>
+            </button>
+          ))}
+        </nav>
+        <footer>
+          <span className="avatar">{initials(ctx.employee.full_name)}</span>
+          <p>
+            <b>{ctx.employee.full_name}</b>
+            <small>{labels[ctx.member.role]}</small>
+          </p>
+          <button className="icon-plain" onClick={logout}>
+            <LogOut />
+          </button>
+        </footer>
+      </aside>
+      {drawer && <button className="scrim" onClick={() => setDrawer(false)} />}
+      <section className="admin-main">
+        <header className="appbar">
+          <div>
+            <button className="menu-button" onClick={() => setDrawer(true)}>
+              <Menu />
+            </button>
+            <span>
+              <b>{ctx.organization.trade_name}</b>
+              <small>{page}</small>
+            </span>
+          </div>
+          <aside>
+            <button className="notify">
+              <Bell />
+            </button>
+          </aside>
+        </header>
+        <div key={page} className="admin-content page-fade">
+          {page === "Hoje" && <Dashboard ctx={ctx} />}{" "}
+          {page === "Funcionários" && <Employees ctx={ctx} />}{" "}
+          {page === "Dispositivos" && <Devices ctx={ctx} />}{" "}
+          {page === "Terminais" && <Terminals ctx={ctx} />}{" "}
+          {page === "Setores e líderes" && <Departments ctx={ctx} />}{" "}
+          {page === "Chamada" && <RollCall ctx={ctx} />}{" "}
+          {page === "Jornadas" && <Schedules ctx={ctx} />}{" "}
+          {page === "Banco de horas" && <TimeBank ctx={ctx} />}{" "}
+          {page === "Conferência" && <ReviewEntries ctx={ctx} />}{" "}
+          {page === "Ocorrências" && <Occurrences ctx={ctx} />}{" "}
+          {page === "Relatórios" && <Reports ctx={ctx} />}{" "}
+          {page === "Métodos de ponto" && <Methods ctx={ctx} />}{" "}
+          {page === "Empresas" && <Companies ctx={ctx} />}{" "}
+          {page === "Cobranças" && <Billing ctx={ctx} />}{" "}
+          {page === "Configurações" && (
+            <Configuration ctx={ctx} onRefresh={onRefresh} />
+          )}
+        </div>
+        <nav className="mobile-admin-nav" aria-label="Navegação principal">
+          {mobilePages.map(([name, I]) => (
+            <button
+              key={name}
+              className={page === name ? "active" : ""}
+              onClick={() => setPage(name)}
+            >
+              <span>
+                <I />
+              </span>
+              <small>{name}</small>
+            </button>
+          ))}
+        </nav>
+      </section>
+    </main>
+  );
+}
+
+export default function Home() {
+  const [ctx, setCtx] = useState<Context | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [demo, setDemo] = useState(false);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setCtx(null);
+      setLoading(false);
+      return;
+    }
+    const [memberResult, employeeResult] = await Promise.all([
+      supabase
+        .from("organization_members")
+        .select("*,organizations(*)")
+        .eq("user_id", user.id)
+        .eq("active", true)
+        .limit(1)
+        .single(),
+      supabase
+        .from("employees")
+        .select("*")
+        .eq("auth_user_id", user.id)
+        .single(),
+    ]);
+    if (memberResult.error || employeeResult.error) {
+      setError("Seu usuário não possui um vínculo ativo.");
+      setLoading(false);
+      return;
+    }
+    const { data: employeeRecord } = await supabase
+      .from("employee_records")
+      .select("id,data")
+      .eq("employee_id", employeeResult.data.id)
+      .eq("template_key", "registro_empregado_br")
+      .maybeSingle();
+    setCtx({
+      member: memberResult.data,
+      employee: employeeResult.data,
+      organization: memberResult.data.organizations,
+      employeeRecord: employeeRecord ?? null,
+    });
+    setLoading(false);
+  }, []);
+  useEffect(() => {
+    if (location.hash.startsWith("#demo-")) setDemo(true);
+    load();
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        setCtx(null);
+        setLoading(false);
+      } else setTimeout(load, 0);
+    });
+    return () => data.subscription.unsubscribe();
+  }, [load]);
+  if (demo)
+    return (
+      <DemoApp
+        onExit={() => {
+          setDemo(false);
+          history.replaceState(null, "", location.pathname);
+        }}
+      />
+    );
+  if (loading)
+    return (
+      <main className="auth-stage">
+        <RefreshCw className="spin" />
+      </main>
+    );
+  if (error)
+    return (
+      <main className="auth-stage">
+        <section className="auth-card">
+          <Brand />
+          <ErrorBox message={error} />
+          <Button
+            onClick={() =>
+              supabase.auth.signOut().then(() => location.reload())
+            }
+          >
+            Voltar ao login
+          </Button>
+        </section>
+      </main>
+    );
+  if (!ctx)
+    return (
+      <Login
+        onLogin={load}
+        onDemo={() => {
+          history.replaceState(null, "", "#demo-hoje");
+          setDemo(true);
+        }}
+      />
+    );
+  if (ctx.employee.must_change_password)
+    return <ChangePassword employee={ctx.employee} onDone={load} />;
+  if (ctx.member.role !== "platform_admin" && !licenseActive(ctx.organization))
+    return <LicenseActivation ctx={ctx} onDone={load} />;
+  if (
+    ctx.member.role === "employee" &&
+    !ctx.employeeRecord?.data?.self_onboarding?.completed_at
+  )
+    return (
+      <EmployeeOnboarding
+        employee={ctx.employee}
+        organization={ctx.organization}
+        onDone={load}
+      />
+    );
+  if (ctx.member.role === "employee")
+    return <EmployeeWeb ctx={ctx} onRefresh={load} />;
+  return <Admin ctx={ctx} onRefresh={load} />;
 }

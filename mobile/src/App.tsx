@@ -1,11 +1,40 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from "react";
 import { Capacitor } from "@capacitor/core";
 import * as BarcodeModule from "@capacitor/barcode-scanner";
 import { Device } from "@capacitor/device";
 import { Geolocation } from "@capacitor/geolocation";
 import {
-  Building2, CalendarDays, Check, ClipboardCheck, Clock3, FileCheck2, Fingerprint, History, KeyRound, LayoutDashboard, LogOut,
-  MapPin, Pencil, QrCode, RadioTower, RefreshCw, ShieldCheck, Smartphone, UserRound, UsersRound, Eye, EyeOff, X,
+  Building2,
+  CalendarDays,
+  Check,
+  ClipboardCheck,
+  Clock3,
+  Copy,
+  FileCheck2,
+  Fingerprint,
+  History,
+  KeyRound,
+  LayoutDashboard,
+  LogOut,
+  MapPin,
+  Pencil,
+  QrCode,
+  RadioTower,
+  RefreshCw,
+  ShieldCheck,
+  Smartphone,
+  UserRound,
+  UsersRound,
+  Eye,
+  EyeOff,
+  X,
 } from "lucide-react";
 import { loginEmail, supabase } from "./supabase";
 import { DeviceAuth } from "./native-auth";
@@ -13,162 +42,2488 @@ import { functionErrorMessage } from "./function-error";
 import { cboTitleFor, commonCboOptions, formatCbo, normalizeCbo } from "./cbo";
 import { EmployeeOnboarding } from "./EmployeeOnboarding";
 
-type AppData={employee:any;member:any;organization:any;employeeRecord:any|null;methods:any[];device:any|null;entries:any[];justifications:any[]};
-type TerminalData={terminal:any;organization:any;deviceUuid:string};
-const labels:Record<string,string>={entry:"Entrada",break_start:"Início do intervalo",break_end:"Fim do intervalo",exit:"Saída"};
-const methodLabels:Record<string,string>={mobile:"Botão no aplicativo",qr_code:"QR Code",face:"Reconhecimento facial"};
-const clock=(v:string)=>new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit"}).format(new Date(v));
-const dayStart=()=>{const d=new Date();d.setHours(0,0,0,0);return d.toISOString()};
-const licenseActive=(organization:any)=>organization?.license_status==="active"&&(!organization?.paid_until||organization.paid_until>=new Date().toISOString().slice(0,10));
-const KEEP_CONNECTED_KEY="pontonorte_keep_connected";
-const UNLOCKED_KEY="pontonorte_unlocked_session";
-const LOGIN_HINT_KEY="pontonorte_login_hint";
-const savedLoginHint=()=>{try{return JSON.parse(localStorage.getItem(LOGIN_HINT_KEY)||"null")||{company:"",username:""}}catch{return{company:"",username:""}}};
-async function logoutApp(){localStorage.removeItem(KEEP_CONNECTED_KEY);sessionStorage.removeItem(UNLOCKED_KEY);await supabase.auth.signOut();location.reload()}
-
-function Brand(){return <div className="brand"><span><RadioTower/></span><b>Ponto<em>Norte</em></b></div>}
-function Field({label,children}:{label:string;children:React.ReactNode}){return <label className="field"><span>{label}</span>{children}</label>}
-function PasswordInput(props:React.InputHTMLAttributes<HTMLInputElement>){
-  const[visible,setVisible]=useState(false);
-  return <span className="password-control"><input {...props} type={visible?"text":"password"}/><button type="button" onClick={()=>setVisible(value=>!value)} aria-label={visible?"Ocultar senha":"Mostrar senha"} title={visible?"Ocultar senha":"Mostrar senha"}>{visible?<EyeOff/>:<Eye/>}</button></span>
-}
-
-function Login({reload}:{reload:()=>void}){
-  const hint=savedLoginHint();const[mode,setMode]=useState<"employee"|"terminal">("employee");const[signup,setSignup]=useState(false);const[forgot,setForgot]=useState(false);const[company,setCompany]=useState(hint.company);const[user,setUser]=useState(hint.username);const[password,setPassword]=useState("");const[remember,setRemember]=useState(true);const[error,setError]=useState("");const[busy,setBusy]=useState(false);
-  async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError("");const{error}=await supabase.auth.signInWithPassword({email:loginEmail(company,user),password});setBusy(false);if(error)return setError("Código, usuário ou senha incorretos.");localStorage.setItem(KEEP_CONNECTED_KEY,String(remember));if(remember)localStorage.setItem(LOGIN_HINT_KEY,JSON.stringify({company,username:user}));else localStorage.removeItem(LOGIN_HINT_KEY);sessionStorage.setItem(UNLOCKED_KEY,"true");reload()}
-  if(signup)return <MobileCompanySignup onBack={()=>setSignup(false)} onDone={reload}/>;
-  if(forgot)return <MobileForgotPassword onBack={()=>setForgot(false)}/>;
-  return <main className="screen login"><header><Brand/></header><div className="mode-switch"><button type="button" className={mode==="employee"?"active":""} onClick={()=>setMode("employee")}><UserRound/>Meu acesso</button><button type="button" className={mode==="terminal"?"active":""} onClick={()=>setMode("terminal")}><Building2/>Aparelho da empresa</button></div><section className="login-copy"><span>{mode==="terminal"?<Building2/>:<ShieldCheck/>}</span><h1>{mode==="terminal"?"Acessar aparelho":"Entrar"}</h1><p>{mode==="terminal"?"Use o acesso do aparelho.":"Código, usuário e senha."}</p></section><form onSubmit={submit}><Field label="Código da empresa"><input required placeholder="Ex.: NORTE01" autoCapitalize="characters" autoComplete="organization" value={company} onChange={e=>setCompany(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))}/></Field><Field label={mode==="terminal"?"Código do aparelho":"Usuário"}><input required placeholder={mode==="terminal"?"Código do aparelho":"Seu usuário"} autoCapitalize="none" autoComplete="username" value={user} onChange={e=>setUser(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g,""))}/></Field><Field label="Senha"><PasswordInput required autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/></Field>{mode==="employee"&&<><label className="remember-row"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/><span><b>Manter conectado</b></span></label><button type="button" className="text-button" onClick={()=>setForgot(true)}>Esqueci meu acesso</button></>}{error&&<p className="error">{error}</p>}<button className="primary" disabled={busy}>{busy?<RefreshCw className="spin"/>:"Entrar"}</button><button type="button" className="outline" onClick={()=>setSignup(true)}>Criar conta da empresa</button></form></main>
-}
-
-function MobileForgotPassword({onBack}:{onBack:()=>void}){
-  const hint=savedLoginHint();const[form,setForm]=useState({company_code:hint.company,email:"",password:"",confirm:""});const[username,setUsername]=useState("");const[busy,setBusy]=useState(false);const[error,setError]=useState("");const[done,setDone]=useState(false);
-  async function submit(e:FormEvent){e.preventDefault();setError("");if(form.password.length<8)return setError("Use uma senha com pelo menos 8 caracteres.");if(form.password!==form.confirm)return setError("As senhas não coincidem.");setBusy(true);const{data,error}=await supabase.functions.invoke("reset-password",{body:{company_code:form.company_code,email:form.email,new_password:form.password}});setBusy(false);if(error)return setError(await functionErrorMessage(error,"Não foi possível redefinir a senha."));setUsername(data.username);localStorage.setItem(LOGIN_HINT_KEY,JSON.stringify({company:form.company_code,username:data.username}));setDone(true)}
-  if(done)return <main className="screen login recovery-mobile"><header><Brand/></header><section className="login-copy"><span><Check/></span><h1>Senha redefinida</h1><p>Seu usuário é <b>{username}</b>.</p></section><button className="primary" onClick={onBack}>Entrar agora</button></main>;
-  return <main className="screen login recovery-mobile"><header><Brand/><button className="link" onClick={onBack}>Voltar</button></header><section className="login-copy"><span><KeyRound/></span><h1>Redefinir senha</h1><p>Informe o e-mail cadastrado.</p></section><form onSubmit={submit}><Field label="Código da empresa"><input required minLength={4} maxLength={12} autoCapitalize="characters" value={form.company_code} onChange={e=>setForm({...form,company_code:e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"")})}/></Field><Field label="E-mail cadastrado"><input required type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value.toLowerCase()})}/></Field><Field label="Nova senha"><PasswordInput required minLength={8} autoComplete="new-password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></Field><Field label="Confirmar senha"><PasswordInput required minLength={8} autoComplete="new-password" value={form.confirm} onChange={e=>setForm({...form,confirm:e.target.value})}/></Field>{error&&<p className="error">{error}</p>}<button className="primary" disabled={busy}>{busy?"Salvando…":"Salvar nova senha"}</button></form></main>;
-}
-
-function MobileCompanySignup({onBack,onDone}:{onBack:()=>void;onDone:()=>void}){
-  const[created,setCreated]=useState<any>(null);const[form,setForm]=useState({legal_name:"",trade_name:"",tax_id:"",owner_name:"",owner_username:"admin",owner_email:"",owner_password:""});const[busy,setBusy]=useState(false);const[error,setError]=useState("");
-  async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError("");const{data,error}=await supabase.functions.invoke("register-company",{body:form});setBusy(false);if(error)return setError(await functionErrorMessage(error,"Não foi possível cadastrar sua empresa."));localStorage.setItem(LOGIN_HINT_KEY,JSON.stringify({company:data.company_code,username:data.username}));setCreated(data)}
-  async function enter(){setBusy(true);setError("");const{error}=await supabase.auth.signInWithPassword({email:loginEmail(created.company_code,form.owner_username),password:form.owner_password});setBusy(false);if(error)return setError("Empresa criada, mas não foi possível entrar automaticamente. Volte ao login.");localStorage.setItem(KEEP_CONNECTED_KEY,"true");sessionStorage.setItem(UNLOCKED_KEY,"true");onDone()}
-  if(created)return <main className="screen login signup-mobile"><header><Brand/></header><section className="login-copy"><span><Check/></span><h1>Empresa pronta</h1><p>Este é o código que sua equipe usará para entrar.</p></section><div className="mobile-company-code">{created.company_code}</div><p className="notice success">Usuário: {created.username}<br/>Teste liberado até {new Date(created.trial_until).toLocaleDateString("pt-BR")}.</p>{error&&<p className="error">{error}</p>}<button className="primary" disabled={busy} onClick={enter}>{busy?"Entrando…":"Entrar agora"}</button><button className="link" onClick={onBack}>Voltar ao login</button></main>;
-  return <main className="screen login signup-mobile"><header><Brand/><button className="link" onClick={onBack}>Voltar</button></header><section className="login-copy"><span><Building2/></span><h1>Cadastre sua empresa</h1><p>Preencha uma vez e entre na hora. Sem esperar código de ativação.</p></section><form onSubmit={submit}><Field label="Nome fantasia"><input required value={form.trade_name} onChange={e=>setForm({...form,trade_name:e.target.value})}/></Field><Field label="Razão social"><input required value={form.legal_name} onChange={e=>setForm({...form,legal_name:e.target.value})}/></Field><Field label="CNPJ ou CPF"><input required value={form.tax_id} onChange={e=>setForm({...form,tax_id:e.target.value})}/></Field><Field label="Nome do administrador"><input required value={form.owner_name} onChange={e=>setForm({...form,owner_name:e.target.value})}/></Field><Field label="E-mail de recuperação"><input required type="email" value={form.owner_email} onChange={e=>setForm({...form,owner_email:e.target.value})}/></Field><Field label="Usuário inicial"><input required value={form.owner_username} onChange={e=>setForm({...form,owner_username:e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g,"")})}/></Field><Field label="Senha"><PasswordInput required minLength={8} autoComplete="new-password" value={form.owner_password} onChange={e=>setForm({...form,owner_password:e.target.value})}/></Field>{error&&<p className="error">{error}</p>}<button className="primary" disabled={busy}>{busy?"Cadastrando…":"Criar empresa e entrar"}</button></form></main>;
-}
-
-function TerminalClock({data}:{data:TerminalData}){
-  const[employeeCode,setEmployeeCode]=useState("");const[pin,setPin]=useState("");const[busy,setBusy]=useState(false);const[message,setMessage]=useState("");const[success,setSuccess]=useState(false);
-  async function record(e:FormEvent){e.preventDefault();setBusy(true);setMessage("");setSuccess(false);try{let coords:any={};if(data.terminal.radius_meters){const permission=await Geolocation.requestPermissions();if(permission.location==="denied")throw new Error("Autorize a localização deste aparelho.");const pos=await Geolocation.getCurrentPosition({enableHighAccuracy:true,timeout:15000});coords={latitude:pos.coords.latitude,longitude:pos.coords.longitude,accuracy_meters:pos.coords.accuracy}}const{data:response,error}=await supabase.functions.invoke("terminal-clock-event",{body:{employee_code:employeeCode.trim(),pin,device_uuid:data.deviceUuid,client_event_id:crypto.randomUUID(),...coords}});if(error)throw new Error(await functionErrorMessage(error,"Não foi possível registrar o ponto."));if(response?.error)throw new Error(response.error);setSuccess(true);setMessage(`${labels[response.entry.event_type]} registrada às ${clock(response.entry.occurred_at)}.`);setEmployeeCode("");setPin("")}catch(error){setMessage(error instanceof Error?error.message:"Não foi possível registrar.")}finally{setBusy(false)}}
-  return <main className="screen terminal"><header><Brand/><button className="link" onClick={()=>logoutApp()}>Sair</button></header><section className="terminal-head"><span><Building2/></span><p>{data.organization.trade_name}</p><h1>{data.terminal.name}</h1><time>{new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit"}).format(new Date())}</time><small>Terminal corporativo ativo</small></section><form className="terminal-form" onSubmit={record}><Field label="Matrícula"><input required inputMode="text" value={employeeCode} onChange={e=>setEmployeeCode(e.target.value)} placeholder="Digite sua matrícula"/></Field><Field label="PIN de 6 números"><PasswordInput required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,""))} placeholder="••••••"/></Field>{message&&<p className={success?"notice success":"notice"}>{message}</p>}<button className="primary" disabled={busy||pin.length!==6}>{busy?<RefreshCw className="spin"/>:<><Clock3/>Registrar ponto</>}</button></form><footer><ShieldCheck/>Após o registro, os campos são limpos para o próximo colaborador.</footer></main>
-}
-
-function Password({employee,reload}:{employee:any;reload:()=>void}){
-  const[password,setPassword]=useState("");const[confirm,setConfirm]=useState("");const[error,setError]=useState("");
-  async function submit(e:FormEvent){e.preventDefault();setError("");if(password.length<8)return setError("Use ao menos 8 caracteres.");if(password!==confirm)return setError("As senhas não coincidem.");const{error:a}=await supabase.auth.updateUser({password});if(a)return setError(a.message);const{error:b}=await supabase.functions.invoke("complete-first-access");if(b)return setError(b.message);reload()}
-  return <main className="screen login"><header><Brand/></header><section className="login-copy"><span><ShieldCheck/></span><h1>Crie uma nova senha</h1><p>A senha provisória só funciona no primeiro acesso.</p></section><form onSubmit={submit}><Field label="Nova senha"><PasswordInput value={password} onChange={e=>setPassword(e.target.value)}/></Field><Field label="Confirmar senha"><PasswordInput value={confirm} onChange={e=>setConfirm(e.target.value)}/></Field>{error&&<p className="error">{error}</p>}<button className="primary">Salvar senha</button></form></main>
-}
-
-function PendingDevice({data,reload}:{data:AppData;reload:()=>void}){
-  return <main className="screen centered"><Brand/><span className="big-icon"><Smartphone/></span><h1>Autorize este celular</h1><p>Este aparelho foi vinculado ao seu usuário. Peça ao RH ou ao líder responsável para aprová-lo antes do primeiro ponto.</p><div className="device-box"><b>{data.device?.device_name||"Celular Android"}</b><small>{data.device?.device_uuid}</small></div><button className="primary" onClick={reload}><RefreshCw/>Verificar autorização</button><button className="link" onClick={()=>logoutApp()}>Sair</button></main>
-}
-
-function ManagementApp({data,reload}:{data:AppData;reload:()=>void}){
-  type ManagerTab="summary"|"companies"|"clock"|"call"|"team";
-  const[tab,setTab]=useState<ManagerTab>(()=>(localStorage.getItem("pontonorte_manager_tab") as ManagerTab)||"summary");const[people,setPeople]=useState<any[]>([]);const[companies,setCompanies]=useState<any[]>([]);const[entries,setEntries]=useState<any[]>([]);const[marks,setMarks]=useState<Record<string,string>>({});const[message,setMessage]=useState("");const[showCreate,setShowCreate]=useState(false);const[editing,setEditing]=useState<any|null>(null);const[busy,setBusy]=useState(false);
-  const[form,setForm]=useState({full_name:"",cpf:"",employee_code:"",username:"",job_title:"",cbo_code:"",cbo_title:"",password:""});
-  const[editForm,setEditForm]=useState({full_name:"",cpf:"",employee_code:"",job_title:"",cbo_code:"",cbo_title:"",phone:""});
-  const departmentId=data.member.department_id;
-  const load=useCallback(async()=>{let query=supabase.from("employees").select("*").eq("organization_id",data.organization.id).order("full_name");if(data.member.role==="manager")query=query.eq("department_id",departmentId);const start=dayStart();const companyQuery=data.member.role==="platform_admin"?supabase.from("organizations").select("id,trade_name,legal_name,company_code,status,license_status,paid_until").order("created_at",{ascending:false}):Promise.resolve({data:[] as any[]});const[p,e,o]=await Promise.all([query,supabase.from("time_entries").select("employee_id,event_type,occurred_at").eq("organization_id",data.organization.id).gte("occurred_at",start),companyQuery]);setPeople(p.data??[]);setEntries(e.data??[]);setCompanies(o.data??[])},[data.organization.id,data.member.role,departmentId]);
-  useEffect(()=>{load()},[load]);
-  useEffect(()=>{localStorage.setItem("pontonorte_manager_tab",tab)},[tab]);
-  const active=people.filter(p=>p.status==="active"),present=new Set(entries.map(e=>e.employee_id));
-  async function finishCall(){if(!departmentId)return setMessage("Seu usuário precisa estar vinculado a um setor para concluir a chamada.");const{data:{user}}=await supabase.auth.getUser();if(!user)return;setBusy(true);const date=new Date().toISOString().slice(0,10);const{data:call,error}=await supabase.from("attendance_calls").upsert({organization_id:data.organization.id,department_id:departmentId,call_date:date,period:"daily",status:"completed",created_by:user.id,completed_at:new Date().toISOString()},{onConflict:"department_id,call_date,period"}).select("id").single();if(!error&&call)await supabase.from("attendance_call_items").upsert(active.map(p=>({call_id:call.id,organization_id:data.organization.id,employee_id:p.id,mark:marks[p.id]||(present.has(p.id)?"present":"absent"),marked_at:new Date().toISOString()})),{onConflict:"call_id,employee_id"});setBusy(false);setMessage(error?error.message:"Chamada concluída e enviada ao RH.")}
-  async function createEmployee(e:FormEvent){e.preventDefault();setBusy(true);setMessage("");const{data:schedules}=await supabase.from("work_schedules").select("id").eq("organization_id",data.organization.id).eq("active",true).limit(1);const{data:created,error}=await supabase.functions.invoke("manage-user",{body:{...form,cbo_code:normalizeCbo(form.cbo_code),organization_id:data.organization.id,department_id:departmentId,schedule_id:schedules?.[0]?.id||null,role:"employee"}});setBusy(false);if(error)return setMessage(await functionErrorMessage(error,"Não foi possível cadastrar."));setForm({full_name:"",cpf:"",employee_code:"",username:"",job_title:"",cbo_code:"",cbo_title:"",password:""});setShowCreate(false);setMessage(`Acesso criado · Empresa ${created.company_code} · Usuário ${created.username} · Senha provisória ${created.temporary_password}`);load()}
-  function beginEdit(person:any){setEditing(person);setEditForm({full_name:person.full_name,cpf:person.cpf||"",employee_code:person.employee_code,job_title:person.job_title||"",cbo_code:formatCbo(person.cbo_code),cbo_title:person.cbo_title||"",phone:person.phone||""})}
-  async function saveEmployee(e:FormEvent){e.preventDefault();if(!editing)return;setBusy(true);setMessage("");const{error}=await supabase.functions.invoke("manage-user",{body:{...editForm,action:"update",organization_id:data.organization.id,employee_id:editing.id,cbo_code:normalizeCbo(editForm.cbo_code),department_id:editing.department_id,schedule_id:editing.schedule_id}});setBusy(false);if(error)return setMessage(await functionErrorMessage(error,"Não foi possível atualizar."));setEditing(null);setMessage("Ficha atualizada com sucesso.");load()}
-  async function ownClock(){setBusy(true);setMessage("");try{const method=data.methods.find(m=>m.method==="mobile"&&m.enabled);if(!method)throw new Error("O ponto pelo aplicativo não está habilitado.");let coords:any={};if(method.require_location){const pos=await Geolocation.getCurrentPosition({enableHighAccuracy:true,timeout:15000});coords={latitude:pos.coords.latitude,longitude:pos.coords.longitude,accuracy_meters:pos.coords.accuracy}}const{data:response,error}=await supabase.functions.invoke("clock-event",{body:{method:"mobile",client_event_id:crypto.randomUUID(),device_uuid:data.device.device_uuid,app_version:"1.1.0",...coords}});if(error)throw new Error(await functionErrorMessage(error,"Não foi possível registrar."));setMessage(`${labels[response.entry.event_type]} registrada às ${clock(response.entry.occurred_at)}.`);reload()}catch(e){setMessage(e instanceof Error?e.message:"Não foi possível registrar.")}finally{setBusy(false)}}
-  const feedback=message&&<p className={message.includes("sucesso")||message.includes("concluída")||message.includes("registrada")||message.includes("QR")?"notice success":"notice"}>{message}</p>;
-  return <main className="screen manager-app app"><header className="top"><Brand/><button className="link" onClick={()=>logoutApp()}>Sair</button></header><section key={tab} className="content page-transition">{tab==="summary"&&<><p className="greeting">{data.member.role==="manager"?"Visão do meu setor":"Visão da empresa"}</p><h1>Olá, {data.employee.full_name.split(" ")[0]}</h1><div className="manager-metrics"><article><b>{active.length}</b><span>Ativos</span></article><article><b>{present.size}</b><span>Presentes</span></article><article><b>{Math.max(0,active.length-present.size)}</b><span>Sem ponto</span></article></div><div className="manager-shortcuts">{data.member.role==="platform_admin"&&<button className="card" onClick={()=>setTab("companies")}><Building2/><span><b>Empresas</b><small>{companies.length} cadastro{companies.length===1?"":"s"} na plataforma</small></span></button>}<button className="card" onClick={()=>setTab("clock")}><Clock3/><span><b>Meu ponto</b><small>Registrar entrada ou saída</small></span></button><button className="card" onClick={()=>setTab("call")}><ClipboardCheck/><span><b>Fazer chamada</b><small>Conferir presença do setor</small></span></button><button className="card" onClick={()=>setTab("team")}><UsersRound/><span><b>Minha equipe</b><small>Cadastrar e editar pessoas</small></span></button></div></>}{tab==="clock"&&<><p className="greeting">Registro pessoal</p><h1>Meu ponto</h1><article className="clock-card compact-clock"><p>Próximo registro pelo aplicativo</p><button className="primary" onClick={ownClock} disabled={busy}><Clock3/>{busy?"Registrando…":"Registrar meu ponto"}</button></article><article className="card today"><header><h2>Meus registros de hoje</h2><span>{data.entries.length}/4</span></header>{["entry","break_start","break_end","exit"].map(type=>{const entry=data.entries.find(item=>item.event_type===type);return <div key={type}><span className={entry?"done":""}>{entry&&<Check/>}</span><p><b>{labels[type]}</b><small>{entry?methodLabels[entry.method]:"Ainda não registrado"}</small></p><time>{entry?clock(entry.occurred_at):"—"}</time></div>})}</article>{feedback}</>}{tab==="call"&&<><p className="greeting">Conferência do setor</p><h1>Chamada de hoje</h1>{feedback}<article className="card mobile-call"><header><div><h2>{active.length} funcionários</h2><small>O ponto já identifica quem está presente.</small></div><button onClick={finishCall} disabled={busy}>Concluir</button></header>{active.map(p=><div key={p.id}><span className="avatar">{p.full_name.split(" ").slice(0,2).map((x:string)=>x[0]).join("")}</span><p><b>{p.full_name}</b><small>{present.has(p.id)?"Ponto identificado":"Sem registro hoje"}</small></p><select value={marks[p.id]||(present.has(p.id)?"present":"absent")} onChange={e=>setMarks({...marks,[p.id]:e.target.value})}><option value="present">Presente</option><option value="late">Atraso</option><option value="absent">Ausente</option><option value="excused">Justificado</option></select></div>)}</article></>}{tab==="companies"&&data.member.role==="platform_admin"&&<><div className="mobile-section-head"><div><p className="greeting">Administração geral</p><h1>Empresas</h1></div></div><p className="notice success">Este painel não exige autorização de dispositivo para o administrador geral.</p><div className="team-list">{companies.map(company=><article className="card" key={company.id}><span className="avatar"><Building2/></span><p><b>{company.trade_name}</b><small>{company.company_code} · {company.license_status==="active"?"Ativa":"Pendente ou suspensa"}{company.paid_until?` · até ${company.paid_until}`:""}</small></p></article>)}</div><a className="primary admin-web-link" href="https://delta-1.github.io/PontoNorte/#empresas" target="_blank" rel="noreferrer"><Building2/>Abrir administração completa</a></>}{tab==="team"&&<><div className="mobile-section-head"><div><p className="greeting">Cadastros do setor</p><h1>Equipe</h1></div><button className="outline small-action" onClick={()=>{setEditing(null);setMessage("");setShowCreate(value=>!value)}}><UserRound/>{showCreate?"Fechar":"Novo"}</button></div>{feedback}{showCreate&&<div className="mobile-form-backdrop"><form className="mobile-employee-sheet" onSubmit={createEmployee} role="dialog" aria-modal="true" aria-labelledby="mobile-new-employee-title">
-  <header className="mobile-employee-sheet-head"><div><small>Novo cadastro</small><h2 id="mobile-new-employee-title">Adicionar funcionário</h2><p>Crie o acesso. No primeiro login, o funcionário completa contato e endereço.</p></div><button type="button" className="mobile-sheet-close" onClick={()=>setShowCreate(false)} aria-label="Fechar cadastro"><X/></button></header>
-  <div className="mobile-employee-form-body">
-    <section className="mobile-form-section"><h3><span>1</span>Identificação</h3><Field label="Nome completo"><input autoComplete="name" required value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/></Field><Field label="CPF (opcional agora)"><input inputMode="numeric" maxLength={14} placeholder="Pode ser completado depois pelo RH" value={form.cpf} onChange={e=>setForm({...form,cpf:e.target.value})}/></Field><div className="two-fields"><Field label="Matrícula"><input required value={form.employee_code} onChange={e=>setForm({...form,employee_code:e.target.value})}/></Field><Field label="Usuário"><input required autoCapitalize="none" autoComplete="username" value={form.username} onChange={e=>setForm({...form,username:e.target.value.toLowerCase()})}/></Field></div></section>
-    <section className="mobile-form-section"><h3><span>2</span>Trabalho</h3><Field label="Cargo"><input value={form.job_title} onChange={e=>setForm({...form,job_title:e.target.value})}/></Field><div className="two-fields"><Field label="CBO"><input list="mobile-cbo-create" inputMode="numeric" placeholder="4110-10" value={form.cbo_code} onChange={e=>{const code=formatCbo(e.target.value);setForm({...form,cbo_code:code,cbo_title:cboTitleFor(code)||form.cbo_title})}}/></Field><Field label="Ocupação"><input value={form.cbo_title} onChange={e=>setForm({...form,cbo_title:e.target.value})}/></Field></div><datalist id="mobile-cbo-create">{commonCboOptions.map(item=><option key={item.code} value={formatCbo(item.code)}>{item.title}</option>)}</datalist></section>
-    <section className="mobile-form-section"><h3><span>3</span>Acesso</h3><Field label="Senha inicial (opcional)"><PasswordInput minLength={8} autoComplete="new-password" placeholder="Em branco, o sistema gera uma senha" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></Field><p className="notice">O funcionário trocará a senha provisória no primeiro acesso.</p></section>
-    {message&&<p className="mobile-form-feedback">{message}</p>}
-  </div>
-  <footer className="mobile-employee-sheet-actions"><button type="button" className="outline" onClick={()=>setShowCreate(false)}>Cancelar</button><button className="primary" disabled={busy}>{busy?"Cadastrando…":"Cadastrar e gerar QR"}</button></footer>
-</form></div>}{editing&&<form className="card mobile-create" onSubmit={saveEmployee}><h2>Editar funcionário</h2><Field label="Nome completo"><input required value={editForm.full_name} onChange={e=>setEditForm({...editForm,full_name:e.target.value})}/></Field><div className="two-fields"><Field label="Matrícula"><input required value={editForm.employee_code} onChange={e=>setEditForm({...editForm,employee_code:e.target.value})}/></Field><Field label="CPF"><input inputMode="numeric" value={editForm.cpf} onChange={e=>setEditForm({...editForm,cpf:e.target.value})}/></Field></div><Field label="Cargo"><input value={editForm.job_title} onChange={e=>setEditForm({...editForm,job_title:e.target.value})}/></Field><div className="two-fields"><Field label="CBO"><input inputMode="numeric" value={editForm.cbo_code} onChange={e=>{const code=formatCbo(e.target.value);setEditForm({...editForm,cbo_code:code,cbo_title:cboTitleFor(code)||editForm.cbo_title})}}/></Field><Field label="Ocupação"><input value={editForm.cbo_title} onChange={e=>setEditForm({...editForm,cbo_title:e.target.value})}/></Field></div><Field label="Telefone"><input value={editForm.phone} onChange={e=>setEditForm({...editForm,phone:e.target.value})}/></Field><div className="two-fields"><button type="button" className="outline" onClick={()=>setEditing(null)}>Cancelar</button><button className="primary" disabled={busy}>Salvar</button></div></form>}<div className="team-list">{active.map(person=><article className="card" key={person.id}><span className="avatar">{person.full_name.split(" ").slice(0,2).map((part:string)=>part[0]).join("")}</span><p><b>{person.full_name}</b><small>{person.job_title||"Sem cargo"}{person.cbo_code?` · CBO ${formatCbo(person.cbo_code)}`:""}</small></p><button className="link" onClick={()=>{setShowCreate(false);beginEdit(person)}}><Pencil/>Editar</button></article>)}</div></>}</section><ManagementNav tab={tab} setTab={setTab} platformAdmin={data.member.role==="platform_admin"}/></main>
-}
-
-function ManagementNav({tab,setTab,platformAdmin}:{tab:"summary"|"companies"|"clock"|"call"|"team";setTab:(value:"summary"|"companies"|"clock"|"call"|"team")=>void;platformAdmin:boolean}){const tabs=platformAdmin?["summary","companies","clock","call","team"]:["summary","clock","call","team"];const index=Math.max(0,tabs.indexOf(tab));return <nav className={"nav fluid-nav "+(platformAdmin?"admin-nav":"")} style={{"--nav-index":index,"--nav-count":tabs.length} as CSSProperties}><span className="nav-fluid-highlight" aria-hidden="true"/><button className={tab==="summary"?"active":""} onClick={()=>setTab("summary")}><LayoutDashboard/><span>Resumo</span></button>{platformAdmin&&<button className={tab==="companies"?"active":""} onClick={()=>setTab("companies")}><Building2/><span>Empresas</span></button>}<button className={tab==="clock"?"active":""} onClick={()=>setTab("clock")}><Clock3/><span>Ponto</span></button><button className={tab==="call"?"active":""} onClick={()=>setTab("call")}><ClipboardCheck/><span>Chamada</span></button><button className={tab==="team"?"active":""} onClick={()=>setTab("team")}><UsersRound/><span>Equipe</span></button></nav>}
-
-function Home({data,reload}:{data:AppData;reload:()=>void}){
-  type EmployeeTab="home"|"history"|"justification"|"profile";
-  const[busy,setBusy]=useState("");const[message,setMessage]=useState("");const[tab,setTab]=useState<EmployeeTab>(()=>(localStorage.getItem("pontonorte_employee_tab") as EmployeeTab)||"home");const[editingProfile,setEditingProfile]=useState(false);const[profileForm,setProfileForm]=useState({job_title:data.employee.job_title||"",cbo_code:formatCbo(data.employee.cbo_code),cbo_title:data.employee.cbo_title||"",phone:data.employee.phone||"",email:data.employee.email||""});
-  const next=["entry","break_start","break_end","exit"][Math.min(data.entries.length,3)];
-  useEffect(()=>{localStorage.setItem("pontonorte_employee_tab",tab)},[tab]);
-  async function getLocation(){
-    const permission=await Geolocation.requestPermissions();
-    if(permission.location==="denied")throw new Error("Autorize a localização nas configurações do celular.");
-    const pos=await Geolocation.getCurrentPosition({enableHighAccuracy:true,timeout:15000});
-    return {latitude:pos.coords.latitude,longitude:pos.coords.longitude,accuracy_meters:pos.coords.accuracy};
-  }
-  async function record(method:"mobile"|"qr_code"|"face"){
-    setBusy(method);setMessage("");
-    try{
-      const coords=await getLocation();let qr_token: string|undefined;
-      if(method==="qr_code"){
-        const result=await (BarcodeModule as any).CapacitorBarcodeScanner.scanBarcode({hint:17,scanInstructions:"Aponte para o seu QR Code individual"});
-        if(!result.ScanResult)throw new Error("Nenhum QR Code foi lido.");
-        qr_token=result.ScanResult;
+type AppData = {
+  employee: any;
+  member: any;
+  organization: any;
+  employeeRecord: any | null;
+  methods: any[];
+  device: any | null;
+  entries: any[];
+  justifications: any[];
+};
+type TerminalData = { terminal: any; organization: any; deviceUuid: string };
+const labels: Record<string, string> = {
+  entry: "Entrada",
+  break_start: "Início do intervalo",
+  break_end: "Fim do intervalo",
+  exit: "Saída",
+};
+const methodLabels: Record<string, string> = {
+  mobile: "Botão no aplicativo",
+  qr_code: "QR Code",
+  face: "Reconhecimento facial",
+};
+const clock = (v: string) =>
+  new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(v));
+const dayStart = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+};
+const licenseActive = (organization: any) =>
+  organization?.license_status === "active" &&
+  (!organization?.paid_until ||
+    organization.paid_until >= new Date().toISOString().slice(0, 10));
+const KEEP_CONNECTED_KEY = "pontonorte_keep_connected";
+const UNLOCKED_KEY = "pontonorte_unlocked_session";
+const LOGIN_HINT_KEY = "pontonorte_login_hint";
+const savedLoginHint = () => {
+  try {
+    return (
+      JSON.parse(localStorage.getItem(LOGIN_HINT_KEY) || "null") || {
+        company: "",
+        username: "",
       }
-      if(method==="face")throw new Error("A empresa ainda precisa configurar o provedor de prova de vida.");
-      const client_event_id=crypto.randomUUID();
-      const {data:response,error}=await supabase.functions.invoke("clock-event",{body:{method,client_event_id,device_uuid:data.device.device_uuid,app_version:"1.0.0",qr_token,...coords}});
-      if(error)throw new Error(await functionErrorMessage(error,"Não foi possível registrar o ponto."));if(response?.error)throw new Error(response.error);
-      setMessage(`${labels[response.entry.event_type]} registrada às ${clock(response.entry.occurred_at)}.`);reload();
-    }catch(e){setMessage(e instanceof Error?e.message:"Não foi possível registrar.");}finally{setBusy("")}
+    );
+  } catch {
+    return { company: "", username: "" };
   }
-  async function saveProfile(e:FormEvent){e.preventDefault();setBusy("profile");setMessage("");const{error}=await supabase.functions.invoke("manage-user",{body:{...profileForm,action:"update",organization_id:data.organization.id,employee_id:data.employee.id,cbo_code:normalizeCbo(profileForm.cbo_code)}});setBusy("");if(error)return setMessage(await functionErrorMessage(error,"Não foi possível atualizar seu perfil."));setEditingProfile(false);setMessage("Perfil atualizado com sucesso.");reload()}
-  if(tab==="history")return <main className="screen app"><Top data={data}/><section key="history" className="content page-transition"><h1>Meus pontos</h1><p className="subtitle">Histórico de hoje</p><div className="card timeline">{data.entries.length?data.entries.map(e=><div key={e.id}><span className="done"><Check/></span><p><b>{labels[e.event_type]}</b><small>{methodLabels[e.method]||e.method}</small></p><time>{clock(e.occurred_at)}</time></div>):<p>Nenhum registro hoje.</p>}</div></section><Nav tab={tab} setTab={setTab}/></main>;
-  if(tab==="justification")return <Justifications data={data} reload={reload} tab={tab} setTab={setTab}/>;
-  if(tab==="profile")return <main className="screen app"><Top data={data}/><section key="profile" className="content page-transition"><div className="mobile-section-head"><h1>Meu perfil</h1><button className="link" onClick={()=>setEditingProfile(value=>!value)}><Pencil/>{editingProfile?"Fechar":"Editar"}</button></div>{message&&<p className={message.includes("sucesso")?"notice success":"notice"}>{message}</p>}{editingProfile?<form className="card mobile-create profile-edit" onSubmit={saveProfile}><Field label="Cargo na empresa"><input value={profileForm.job_title} onChange={e=>setProfileForm({...profileForm,job_title:e.target.value})}/></Field><Field label="Código CBO"><input list="employee-cbo-options" inputMode="numeric" placeholder="4110-10" value={profileForm.cbo_code} onChange={e=>{const code=formatCbo(e.target.value);setProfileForm({...profileForm,cbo_code:code,cbo_title:cboTitleFor(code)||profileForm.cbo_title})}}/></Field><Field label="Ocupação CBO"><input value={profileForm.cbo_title} onChange={e=>setProfileForm({...profileForm,cbo_title:e.target.value})}/></Field><datalist id="employee-cbo-options">{commonCboOptions.map(item=><option key={item.code} value={formatCbo(item.code)}>{item.title}</option>)}</datalist><Field label="Telefone"><input value={profileForm.phone} onChange={e=>setProfileForm({...profileForm,phone:e.target.value})}/></Field><Field label="E-mail pessoal"><input type="email" value={profileForm.email} onChange={e=>setProfileForm({...profileForm,email:e.target.value})}/></Field><button className="primary" disabled={busy==="profile"}>{busy==="profile"?"Salvando…":"Salvar alterações"}</button></form>:<div className="card profile"><span>{data.employee.full_name.split(" ").slice(0,2).map((x:string)=>x[0]).join("")}</span><h2>{data.employee.full_name}</h2><p>{data.employee.job_title||"Funcionário"}</p><dl><div><dt>Empresa</dt><dd>{data.organization.trade_name}</dd></div><div><dt>Código</dt><dd>{data.organization.company_code}</dd></div><div><dt>Matrícula</dt><dd>{data.employee.employee_code}</dd></div><div><dt>CBO</dt><dd>{data.employee.cbo_code?formatCbo(data.employee.cbo_code):"Não informado"}</dd></div><div><dt>Função CBO</dt><dd>{data.employee.cbo_title||"Não informada"}</dd></div></dl><button className="outline" onClick={()=>logoutApp()}><LogOut/>Sair</button></div>}</section><Nav tab={tab} setTab={setTab}/></main>;
-  return <main className="screen app"><Top data={data}/><section key="home" className="content page-transition"><p className="greeting">Olá, {data.employee.full_name.split(" ")[0]}</p><h1>Seu dia de trabalho</h1><article className="clock-card"><header><span><CalendarDays/> {new Intl.DateTimeFormat("pt-BR",{weekday:"long",day:"2-digit",month:"short"}).format(new Date())}</span><i>Online</i></header><time>{new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit"}).format(new Date())}</time><p>Próximo registro: <b>{labels[next]}</b></p><div className="methods">{data.methods.filter(m=>m.enabled&&["mobile","qr_code","face"].includes(m.method)).map(m=><button key={m.method} disabled={!!busy||data.entries.length>=4} onClick={()=>record(m.method)}>{m.method==="qr_code"?<QrCode/>:m.method==="face"?<Fingerprint/>:<Smartphone/>}<span>{methodLabels[m.method]}</span>{busy===m.method&&<RefreshCw className="spin"/>}</button>)}</div></article>{message&&<div className={message.includes("registrada")?"notice success":"notice"}>{message}</div>}<article className="card location"><MapPin/><p><b>Localização protegida</b><small>Usada apenas na validação do registro, conforme regras da empresa.</small></p></article><article className="card today"><header><h2>Registros de hoje</h2><span>{data.entries.length}/4</span></header>{["entry","break_start","break_end","exit"].map(type=>{const e=data.entries.find(x=>x.event_type===type);return <div key={type}><span className={e?"done":""}>{e&&<Check/>}</span><p><b>{labels[type]}</b><small>{e?methodLabels[e.method]:"Ainda não registrado"}</small></p><time>{e?clock(e.occurred_at):"—"}</time></div>})}</article></section><Nav tab={tab} setTab={setTab}/></main>
+};
+async function logoutApp() {
+  localStorage.removeItem(KEEP_CONNECTED_KEY);
+  sessionStorage.removeItem(UNLOCKED_KEY);
+  await supabase.auth.signOut();
+  location.reload();
 }
 
-function Top({data}:{data:AppData}){return <header className="top"><Brand/><span className="avatar">{data.employee.full_name.split(" ").slice(0,2).map((x:string)=>x[0]).join("")}</span></header>}
-function Justifications({data,reload,tab,setTab}:{data:AppData;reload:()=>void;tab:string;setTab:(v:"home"|"history"|"justification"|"profile")=>void}){
-  const[kind,setKind]=useState("Atestado médico");const[reason,setReason]=useState("");const[start,setStart]=useState("");const[end,setEnd]=useState("");const[file,setFile]=useState<File|null>(null);const[message,setMessage]=useState("");
-  async function submit(e:FormEvent){e.preventDefault();setMessage("");const{data:{user}}=await supabase.auth.getUser();if(!user)return;let document_path:string|null=null;if(file){document_path=`${data.organization.id}/${data.employee.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;const{error}=await supabase.storage.from("documents").upload(document_path,file);if(error)return setMessage(error.message)}const{error}=await supabase.from("justifications").insert({organization_id:data.organization.id,employee_id:data.employee.id,kind,reason,starts_at:new Date(start).toISOString(),ends_at:new Date(end).toISOString(),document_path,created_by:user.id});if(error)return setMessage(error.message);setMessage("Justificativa enviada ao RH.");setReason("");setFile(null);reload()}
-  return <main className="screen app"><Top data={data}/><section key="justification" className="content page-transition"><h1>Justificativas</h1><form className="card justify-form" onSubmit={submit}><Field label="Tipo"><select value={kind} onChange={e=>setKind(e.target.value)}><option>Atestado médico</option><option>Declaração</option><option>Esquecimento de ponto</option><option>Outro</option></select></Field><Field label="Motivo"><textarea required value={reason} onChange={e=>setReason(e.target.value)}/></Field><Field label="Início"><input required type="datetime-local" value={start} onChange={e=>setStart(e.target.value)}/></Field><Field label="Fim"><input required type="datetime-local" value={end} onChange={e=>setEnd(e.target.value)}/></Field><Field label="Documento"><input type="file" accept="application/pdf,image/jpeg,image/png" onChange={e=>setFile(e.target.files?.[0]??null)}/></Field>{message&&<p className={message.includes("enviada")?"notice success":"notice"}>{message}</p>}<button className="primary"><FileCheck2/>Enviar ao RH</button></form><div className="card requests">{data.justifications.map(j=><div key={j.id}><p><b>{j.kind}</b><small>{new Date(j.starts_at).toLocaleDateString("pt-BR")}</small></p><span className={j.status}>{j.status}</span></div>)}</div></section><Nav tab={tab} setTab={setTab}/></main>
+function Brand() {
+  return (
+    <div className="brand">
+      <span>
+        <RadioTower />
+      </span>
+      <b>
+        Ponto<em>Norte</em>
+      </b>
+    </div>
+  );
 }
-function Nav({tab,setTab}:{tab:string;setTab:(v:"home"|"history"|"justification"|"profile")=>void}){const tabs=["home","history","justification","profile"];const index=Math.max(0,tabs.indexOf(tab));return <nav className="nav fluid-nav" style={{"--nav-index":index} as CSSProperties}><span className="nav-fluid-highlight" aria-hidden="true"/><button className={tab==="home"?"active":""} onClick={()=>setTab("home")}><Clock3/><span>Ponto</span></button><button className={tab==="history"?"active":""} onClick={()=>setTab("history")}><History/><span>Histórico</span></button><button className={tab==="justification"?"active":""} onClick={()=>setTab("justification")}><FileCheck2/><span>Justificar</span></button><button className={tab==="profile"?"active":""} onClick={()=>setTab("profile")}><UserRound/><span>Perfil</span></button></nav>}
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+function PasswordInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <span className="password-control">
+      <input {...props} type={visible ? "text" : "password"} />
+      <button
+        type="button"
+        onClick={() => setVisible((value) => !value)}
+        aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
+        title={visible ? "Ocultar senha" : "Mostrar senha"}
+      >
+        {visible ? <EyeOff /> : <Eye />}
+      </button>
+    </span>
+  );
+}
 
-function AppLock({unlock,error}:{unlock:()=>void;error:string}){return <main className="screen centered"><Brand/><span className="big-icon"><Fingerprint/></span><h1>Desbloquear PontoNorte</h1><p>Confirme com a digital, reconhecimento do aparelho ou senha da tela de bloqueio.</p>{error&&<p className="error">{error}</p>}<button className="primary" onClick={unlock}><Fingerprint/>Desbloquear</button><button className="link" onClick={logoutApp}>Entrar com outra conta</button></main>}
+function Login({ reload }: { reload: () => void }) {
+  const hint = savedLoginHint();
+  const [mode, setMode] = useState<"employee" | "terminal">("employee");
+  const [signup, setSignup] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const [company, setCompany] = useState(hint.company);
+  const [user, setUser] = useState(hint.username);
+  const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginEmail(company, user),
+      password,
+    });
+    setBusy(false);
+    if (error) return setError("Código, usuário ou senha incorretos.");
+    localStorage.setItem(KEEP_CONNECTED_KEY, String(remember));
+    if (remember)
+      localStorage.setItem(
+        LOGIN_HINT_KEY,
+        JSON.stringify({ company, username: user }),
+      );
+    else localStorage.removeItem(LOGIN_HINT_KEY);
+    sessionStorage.setItem(UNLOCKED_KEY, "true");
+    reload();
+  }
+  if (signup)
+    return (
+      <MobileCompanySignup onBack={() => setSignup(false)} onDone={reload} />
+    );
+  if (forgot) return <MobileForgotPassword onBack={() => setForgot(false)} />;
+  return (
+    <main className="screen login">
+      <header>
+        <Brand />
+      </header>
+      <div className="mode-switch">
+        <button
+          type="button"
+          className={mode === "employee" ? "active" : ""}
+          onClick={() => setMode("employee")}
+        >
+          <UserRound />
+          Meu acesso
+        </button>
+        <button
+          type="button"
+          className={mode === "terminal" ? "active" : ""}
+          onClick={() => setMode("terminal")}
+        >
+          <Building2 />
+          Aparelho da empresa
+        </button>
+      </div>
+      <section className="login-copy">
+        <span>{mode === "terminal" ? <Building2 /> : <ShieldCheck />}</span>
+        <h1>{mode === "terminal" ? "Acessar aparelho" : "Entrar"}</h1>
+        <p>
+          {mode === "terminal"
+            ? "Use o acesso do aparelho."
+            : "Código, usuário e senha."}
+        </p>
+      </section>
+      <form onSubmit={submit}>
+        <Field label="Código da empresa">
+          <input
+            required
+            placeholder="Ex.: NORTE01"
+            autoCapitalize="characters"
+            autoComplete="organization"
+            value={company}
+            onChange={(e) =>
+              setCompany(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))
+            }
+          />
+        </Field>
+        <Field label={mode === "terminal" ? "Código do aparelho" : "Usuário"}>
+          <input
+            required
+            placeholder={
+              mode === "terminal" ? "Código do aparelho" : "Seu usuário"
+            }
+            autoCapitalize="none"
+            autoComplete="username"
+            value={user}
+            onChange={(e) =>
+              setUser(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ""))
+            }
+          />
+        </Field>
+        <Field label="Senha">
+          <PasswordInput
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </Field>
+        {mode === "employee" && (
+          <>
+            <label className="remember-row">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+              />
+              <span>
+                <b>Manter conectado</b>
+              </span>
+            </label>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setForgot(true)}
+            >
+              Esqueci meu acesso
+            </button>
+          </>
+        )}
+        {error && <p className="error">{error}</p>}
+        <button className="primary" disabled={busy}>
+          {busy ? <RefreshCw className="spin" /> : "Entrar"}
+        </button>
+        <button
+          type="button"
+          className="outline"
+          onClick={() => setSignup(true)}
+        >
+          Criar conta da empresa
+        </button>
+      </form>
+    </main>
+  );
+}
 
-export default function App(){
-  const[data,setData]=useState<AppData|TerminalData|null>(null);const[loading,setLoading]=useState(true);const[error,setError]=useState("");const[locked,setLocked]=useState(false);const[unlockError,setUnlockError]=useState("");
-  const reload=useCallback(async()=>{
-    setLoading(true);setError("");
-    const{data:{session}}=await supabase.auth.getSession();const user=session?.user;if(!user){setData(null);setLocked(false);setLoading(false);return}const keep=localStorage.getItem(KEEP_CONNECTED_KEY)==="true";const unlocked=sessionStorage.getItem(UNLOCKED_KEY)==="true";if(!keep&&!unlocked){await supabase.auth.signOut();setData(null);setLocked(false);setLoading(false);return}if(keep&&Capacitor.isNativePlatform()&&!unlocked){setLocked(true);setLoading(false);return}
-    const{data:member}=await supabase.from("organization_members").select("role,organization_id,organizations(*)").eq("user_id",user.id).eq("active",true).limit(1).single();
-    if(member?.role==="terminal"){const{data:terminal,error:terminalError}=await supabase.from("terminals").select("*").eq("auth_user_id",user.id).single();if(terminalError||!terminal){setError("Terminal não encontrado ou desativado.");setLoading(false);return}const id=await Device.getId();setData({terminal,organization:member.organizations,deviceUuid:id.identifier});setLoading(false);return}
-    const{data:employee,error:e}=await supabase.from("employees").select("*,organizations(*)").eq("auth_user_id",user.id).single();
-    if(e||!employee){setError("Vínculo de funcionário não encontrado.");setLoading(false);return}
-    const info=await Device.getInfo();const id=await Device.getId();
-    let{data:device}=await supabase.from("authorized_devices").select("*").eq("organization_id",employee.organization_id).eq("device_uuid",id.identifier).maybeSingle();
-    if(!device){const inserted=await supabase.from("authorized_devices").insert({organization_id:employee.organization_id,employee_id:employee.id,device_uuid:id.identifier,device_name:info.model||"Celular Android",platform:info.platform,app_version:"1.0.0"}).select("*").single();device=inserted.data}
-    const[meth,entries,justifications,employeeRecord]=await Promise.all([
-      supabase.from("clock_methods").select("*").eq("organization_id",employee.organization_id),
-      supabase.from("time_entries").select("*").eq("employee_id",employee.id).gte("occurred_at",dayStart()).order("occurred_at"),
-      supabase.from("justifications").select("*").eq("employee_id",employee.id).order("created_at",{ascending:false}).limit(20),
-      supabase.from("employee_records").select("id,data").eq("employee_id",employee.id).eq("template_key","registro_empregado_br").maybeSingle(),
+function MobileForgotPassword({ onBack }: { onBack: () => void }) {
+  const hint = savedLoginHint();
+  const [form, setForm] = useState({
+    company_code: hint.company,
+    email: "",
+    password: "",
+    confirm: "",
+  });
+  const [username, setUsername] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (form.password.length < 8)
+      return setError("Use uma senha com pelo menos 8 caracteres.");
+    if (form.password !== form.confirm)
+      return setError("As senhas não coincidem.");
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke("reset-password", {
+      body: {
+        company_code: form.company_code,
+        email: form.email,
+        new_password: form.password,
+      },
+    });
+    setBusy(false);
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível redefinir a senha.",
+        ),
+      );
+    setUsername(data.username);
+    localStorage.setItem(
+      LOGIN_HINT_KEY,
+      JSON.stringify({ company: form.company_code, username: data.username }),
+    );
+    setDone(true);
+  }
+  if (done)
+    return (
+      <main className="screen login recovery-mobile">
+        <header>
+          <Brand />
+        </header>
+        <section className="login-copy">
+          <span>
+            <Check />
+          </span>
+          <h1>Senha redefinida</h1>
+          <p>
+            Seu usuário é <b>{username}</b>.
+          </p>
+        </section>
+        <button className="primary" onClick={onBack}>
+          Entrar agora
+        </button>
+      </main>
+    );
+  return (
+    <main className="screen login recovery-mobile">
+      <header>
+        <Brand />
+        <button className="link" onClick={onBack}>
+          Voltar
+        </button>
+      </header>
+      <section className="login-copy">
+        <span>
+          <KeyRound />
+        </span>
+        <h1>Redefinir senha</h1>
+        <p>Informe o e-mail cadastrado.</p>
+      </section>
+      <form onSubmit={submit}>
+        <Field label="Código da empresa">
+          <input
+            required
+            minLength={4}
+            maxLength={12}
+            autoCapitalize="characters"
+            value={form.company_code}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                company_code: e.target.value
+                  .toUpperCase()
+                  .replace(/[^A-Z0-9]/g, ""),
+              })
+            }
+          />
+        </Field>
+        <Field label="E-mail cadastrado">
+          <input
+            required
+            type="email"
+            value={form.email}
+            onChange={(e) =>
+              setForm({ ...form, email: e.target.value.toLowerCase() })
+            }
+          />
+        </Field>
+        <Field label="Nova senha">
+          <PasswordInput
+            required
+            minLength={8}
+            autoComplete="new-password"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+          />
+        </Field>
+        <Field label="Confirmar senha">
+          <PasswordInput
+            required
+            minLength={8}
+            autoComplete="new-password"
+            value={form.confirm}
+            onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+          />
+        </Field>
+        {error && <p className="error">{error}</p>}
+        <button className="primary" disabled={busy}>
+          {busy ? "Salvando…" : "Salvar nova senha"}
+        </button>
+      </form>
+    </main>
+  );
+}
+
+function MobileCompanySignup({
+  onBack,
+  onDone,
+}: {
+  onBack: () => void;
+  onDone: () => void;
+}) {
+  const [created, setCreated] = useState<any>(null);
+  const [form, setForm] = useState({
+    legal_name: "",
+    trade_name: "",
+    tax_id: "",
+    owner_name: "",
+    owner_username: "admin",
+    owner_email: "",
+    owner_password: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    const { data, error } = await supabase.functions.invoke(
+      "register-company",
+      { body: form },
+    );
+    setBusy(false);
+    if (error)
+      return setError(
+        await functionErrorMessage(
+          error,
+          "Não foi possível cadastrar sua empresa.",
+        ),
+      );
+    localStorage.setItem(
+      LOGIN_HINT_KEY,
+      JSON.stringify({ company: data.company_code, username: data.username }),
+    );
+    setCreated(data);
+  }
+  async function enter() {
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginEmail(created.company_code, form.owner_username),
+      password: form.owner_password,
+    });
+    setBusy(false);
+    if (error)
+      return setError(
+        "Empresa criada, mas não foi possível entrar automaticamente. Volte ao login.",
+      );
+    localStorage.setItem(KEEP_CONNECTED_KEY, "true");
+    sessionStorage.setItem(UNLOCKED_KEY, "true");
+    onDone();
+  }
+  if (created)
+    return (
+      <main className="screen login signup-mobile">
+        <header>
+          <Brand />
+        </header>
+        <section className="login-copy">
+          <span>
+            <Check />
+          </span>
+          <h1>Empresa pronta</h1>
+          <p>Este é o código que sua equipe usará para entrar.</p>
+        </section>
+        <div className="mobile-company-code">{created.company_code}</div>
+        <p className="notice success">
+          Usuário: {created.username}
+          <br />
+          Teste liberado até{" "}
+          {new Date(created.trial_until).toLocaleDateString("pt-BR")}.
+        </p>
+        {error && <p className="error">{error}</p>}
+        <button className="primary" disabled={busy} onClick={enter}>
+          {busy ? "Entrando…" : "Entrar agora"}
+        </button>
+        <button className="link" onClick={onBack}>
+          Voltar ao login
+        </button>
+      </main>
+    );
+  return (
+    <main className="screen login signup-mobile">
+      <header>
+        <Brand />
+        <button className="link" onClick={onBack}>
+          Voltar
+        </button>
+      </header>
+      <section className="login-copy">
+        <span>
+          <Building2 />
+        </span>
+        <h1>Cadastre sua empresa</h1>
+        <p>Preencha uma vez e entre na hora. Sem esperar código de ativação.</p>
+      </section>
+      <form onSubmit={submit}>
+        <Field label="Nome fantasia">
+          <input
+            required
+            value={form.trade_name}
+            onChange={(e) => setForm({ ...form, trade_name: e.target.value })}
+          />
+        </Field>
+        <Field label="Razão social">
+          <input
+            required
+            value={form.legal_name}
+            onChange={(e) => setForm({ ...form, legal_name: e.target.value })}
+          />
+        </Field>
+        <Field label="CNPJ ou CPF">
+          <input
+            required
+            value={form.tax_id}
+            onChange={(e) => setForm({ ...form, tax_id: e.target.value })}
+          />
+        </Field>
+        <Field label="Nome do administrador">
+          <input
+            required
+            value={form.owner_name}
+            onChange={(e) => setForm({ ...form, owner_name: e.target.value })}
+          />
+        </Field>
+        <Field label="E-mail de recuperação">
+          <input
+            required
+            type="email"
+            value={form.owner_email}
+            onChange={(e) => setForm({ ...form, owner_email: e.target.value })}
+          />
+        </Field>
+        <Field label="Usuário inicial">
+          <input
+            required
+            value={form.owner_username}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                owner_username: e.target.value
+                  .toLowerCase()
+                  .replace(/[^a-z0-9._-]/g, ""),
+              })
+            }
+          />
+        </Field>
+        <Field label="Senha">
+          <PasswordInput
+            required
+            minLength={8}
+            autoComplete="new-password"
+            value={form.owner_password}
+            onChange={(e) =>
+              setForm({ ...form, owner_password: e.target.value })
+            }
+          />
+        </Field>
+        {error && <p className="error">{error}</p>}
+        <button className="primary" disabled={busy}>
+          {busy ? "Cadastrando…" : "Criar empresa e entrar"}
+        </button>
+      </form>
+    </main>
+  );
+}
+
+function TerminalClock({ data }: { data: TerminalData }) {
+  const [employeeCode, setEmployeeCode] = useState("");
+  const [pin, setPin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [success, setSuccess] = useState(false);
+  async function record(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMessage("");
+    setSuccess(false);
+    try {
+      let coords: any = {};
+      if (data.terminal.radius_meters) {
+        const permission = await Geolocation.requestPermissions();
+        if (permission.location === "denied")
+          throw new Error("Autorize a localização deste aparelho.");
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 15000,
+        });
+        coords = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy_meters: pos.coords.accuracy,
+        };
+      }
+      const { data: response, error } = await supabase.functions.invoke(
+        "terminal-clock-event",
+        {
+          body: {
+            employee_code: employeeCode.trim(),
+            pin,
+            device_uuid: data.deviceUuid,
+            client_event_id: crypto.randomUUID(),
+            ...coords,
+          },
+        },
+      );
+      if (error)
+        throw new Error(
+          await functionErrorMessage(
+            error,
+            "Não foi possível registrar o ponto.",
+          ),
+        );
+      if (response?.error) throw new Error(response.error);
+      setSuccess(true);
+      setMessage(
+        `${labels[response.entry.event_type]} registrada às ${clock(response.entry.occurred_at)}.`,
+      );
+      setEmployeeCode("");
+      setPin("");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Não foi possível registrar.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="screen terminal">
+      <header>
+        <Brand />
+        <button className="link" onClick={() => logoutApp()}>
+          Sair
+        </button>
+      </header>
+      <section className="terminal-head">
+        <span>
+          <Building2 />
+        </span>
+        <p>{data.organization.trade_name}</p>
+        <h1>{data.terminal.name}</h1>
+        <time>
+          {new Intl.DateTimeFormat("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }).format(new Date())}
+        </time>
+        <small>Terminal corporativo ativo</small>
+      </section>
+      <form className="terminal-form" onSubmit={record}>
+        <Field label="Matrícula">
+          <input
+            required
+            inputMode="text"
+            value={employeeCode}
+            onChange={(e) => setEmployeeCode(e.target.value)}
+            placeholder="Digite sua matrícula"
+          />
+        </Field>
+        <Field label="PIN de 6 números">
+          <PasswordInput
+            required
+            inputMode="numeric"
+            pattern="[0-9]{6}"
+            maxLength={6}
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+            placeholder="••••••"
+          />
+        </Field>
+        {message && (
+          <p className={success ? "notice success" : "notice"}>{message}</p>
+        )}
+        <button className="primary" disabled={busy || pin.length !== 6}>
+          {busy ? (
+            <RefreshCw className="spin" />
+          ) : (
+            <>
+              <Clock3 />
+              Registrar ponto
+            </>
+          )}
+        </button>
+      </form>
+      <footer>
+        <ShieldCheck />
+        Após o registro, os campos são limpos para o próximo colaborador.
+      </footer>
+    </main>
+  );
+}
+
+function Password({ employee, reload }: { employee: any; reload: () => void }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (password.length < 8) return setError("Use ao menos 8 caracteres.");
+    if (password !== confirm) return setError("As senhas não coincidem.");
+    const { error: a } = await supabase.auth.updateUser({ password });
+    if (a) return setError(a.message);
+    const { error: b } = await supabase.functions.invoke(
+      "complete-first-access",
+    );
+    if (b) return setError(b.message);
+    reload();
+  }
+  return (
+    <main className="screen login">
+      <header>
+        <Brand />
+      </header>
+      <section className="login-copy">
+        <span>
+          <ShieldCheck />
+        </span>
+        <h1>Crie uma nova senha</h1>
+        <p>A senha provisória só funciona no primeiro acesso.</p>
+      </section>
+      <form onSubmit={submit}>
+        <Field label="Nova senha">
+          <PasswordInput
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </Field>
+        <Field label="Confirmar senha">
+          <PasswordInput
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+          />
+        </Field>
+        {error && <p className="error">{error}</p>}
+        <button className="primary">Salvar senha</button>
+      </form>
+    </main>
+  );
+}
+
+function PendingDevice({
+  data,
+  reload,
+}: {
+  data: AppData;
+  reload: () => void;
+}) {
+  return (
+    <main className="screen centered">
+      <Brand />
+      <span className="big-icon">
+        <Smartphone />
+      </span>
+      <h1>Autorize este celular</h1>
+      <p>
+        Este aparelho foi vinculado ao seu usuário. Peça ao RH ou ao líder
+        responsável para aprová-lo antes do primeiro ponto.
+      </p>
+      <div className="device-box">
+        <b>{data.device?.device_name || "Celular Android"}</b>
+        <small>{data.device?.device_uuid}</small>
+      </div>
+      <button className="primary" onClick={reload}>
+        <RefreshCw />
+        Verificar autorização
+      </button>
+      <button className="link" onClick={() => logoutApp()}>
+        Sair
+      </button>
+    </main>
+  );
+}
+
+function ManagementApp({
+  data,
+  reload,
+}: {
+  data: AppData;
+  reload: () => void;
+}) {
+  type ManagerTab = "summary" | "companies" | "clock" | "call" | "team";
+  const [tab, setTab] = useState<ManagerTab>(
+    () =>
+      (localStorage.getItem("pontonorte_manager_tab") as ManagerTab) ||
+      "summary",
+  );
+  const [people, setPeople] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [entries, setEntries] = useState<any[]>([]);
+  const [marks, setMarks] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState("");
+  const [accessInfo, setAccessInfo] = useState<any | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({
+    full_name: "",
+    cpf: "",
+    employee_code: "",
+    username: "",
+    job_title: "",
+    cbo_code: "",
+    cbo_title: "",
+    password: "",
+  });
+  const [editForm, setEditForm] = useState({
+    full_name: "",
+    cpf: "",
+    employee_code: "",
+    job_title: "",
+    cbo_code: "",
+    cbo_title: "",
+    phone: "",
+  });
+  const departmentId = data.member.department_id;
+  const load = useCallback(async () => {
+    let query = supabase
+      .from("employees")
+      .select("*")
+      .eq("organization_id", data.organization.id)
+      .order("full_name");
+    if (data.member.role === "manager")
+      query = query.eq("department_id", departmentId);
+    const start = dayStart();
+    const companyQuery =
+      data.member.role === "platform_admin"
+        ? supabase
+            .from("organizations")
+            .select(
+              "id,trade_name,legal_name,company_code,status,license_status,paid_until",
+            )
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] as any[] });
+    const [p, e, o] = await Promise.all([
+      query,
+      supabase
+        .from("time_entries")
+        .select("employee_id,event_type,occurred_at")
+        .eq("organization_id", data.organization.id)
+        .gte("occurred_at", start),
+      companyQuery,
     ]);
-    setData({employee,member,organization:employee.organizations,employeeRecord:employeeRecord.data??null,methods:meth.data??[],device,entries:entries.data??[],justifications:justifications.data??[]});setLoading(false);
-  },[]);
-  useEffect(()=>{reload()},[reload]);
-  useEffect(()=>{let hiddenAt=0;const onVisibility=()=>{if(document.hidden){hiddenAt=Date.now();return}if(hiddenAt&&Date.now()-hiddenAt>30000&&localStorage.getItem(KEEP_CONNECTED_KEY)==="true"){sessionStorage.removeItem(UNLOCKED_KEY);setLocked(true);setData(null)}};document.addEventListener("visibilitychange",onVisibility);return()=>document.removeEventListener("visibilitychange",onVisibility)},[]);
-  const unlock=useCallback(async()=>{setUnlockError("");try{if(Capacitor.isNativePlatform())await DeviceAuth.authenticate({title:"Desbloquear PontoNorte",subtitle:"Use sua digital, rosto ou a senha do celular"});sessionStorage.setItem(UNLOCKED_KEY,"true");setLocked(false);reload()}catch{setUnlockError("Não foi possível confirmar sua identidade. Tente novamente.")}},[reload]);
-  const content=useMemo(()=>{if(locked)return <AppLock unlock={unlock} error={unlockError}/>;if(loading)return <main className="screen centered"><RefreshCw className="spin"/></main>;if(error)return <main className="screen centered"><ShieldCheck/><h1>Acesso indisponível</h1><p>{error}</p><button className="outline" onClick={()=>logoutApp()}>Sair</button></main>;if(!data)return <Login reload={reload}/>;if("terminal" in data){if(!licenseActive(data.organization))return <main className="screen centered"><ShieldCheck/><h1>Licença pendente</h1><p>Peça ao administrador da empresa para renovar a licença.</p><button className="outline" onClick={()=>logoutApp()}>Sair</button></main>;return <TerminalClock data={data}/>}if(data.employee.must_change_password)return <Password employee={data.employee} reload={reload}/>;if(data.member.role!=="platform_admin"&&!licenseActive(data.organization))return <main className="screen centered"><ShieldCheck/><h1>Licença pendente</h1><p>Entre pelo site PontoNorte como administrador para informar o código de ativação.</p><button className="outline" onClick={()=>logoutApp()}>Sair</button></main>;if(data.member.role==="employee"&&!data.employeeRecord?.data?.self_onboarding?.completed_at)return <EmployeeOnboarding employee={data.employee} organization={data.organization} reload={reload}/>;if(data.member.role!=="platform_admin"&&data.organization.settings?.require_device_authorization&&!data.device?.approved)return <PendingDevice data={data} reload={reload}/>;if(["manager","hr_agent","hr_admin","company_owner","platform_admin"].includes(data.member.role))return <ManagementApp data={data} reload={reload}/>;return <Home data={data} reload={reload}/>},[data,error,loading,locked,reload,unlock,unlockError]);
+    setPeople(p.data ?? []);
+    setEntries(e.data ?? []);
+    setCompanies(o.data ?? []);
+  }, [data.organization.id, data.member.role, departmentId]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  useEffect(() => {
+    localStorage.setItem("pontonorte_manager_tab", tab);
+  }, [tab]);
+  const active = people.filter((p) => p.status === "active"),
+    present = new Set(entries.map((e) => e.employee_id));
+  async function finishCall() {
+    if (!departmentId)
+      return setMessage(
+        "Seu usuário precisa estar vinculado a um setor para concluir a chamada.",
+      );
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    setBusy(true);
+    const date = new Date().toISOString().slice(0, 10);
+    const { data: call, error } = await supabase
+      .from("attendance_calls")
+      .upsert(
+        {
+          organization_id: data.organization.id,
+          department_id: departmentId,
+          call_date: date,
+          period: "daily",
+          status: "completed",
+          created_by: user.id,
+          completed_at: new Date().toISOString(),
+        },
+        { onConflict: "department_id,call_date,period" },
+      )
+      .select("id")
+      .single();
+    if (!error && call)
+      await supabase.from("attendance_call_items").upsert(
+        active.map((p) => ({
+          call_id: call.id,
+          organization_id: data.organization.id,
+          employee_id: p.id,
+          mark: marks[p.id] || (present.has(p.id) ? "present" : "absent"),
+          marked_at: new Date().toISOString(),
+        })),
+        { onConflict: "call_id,employee_id" },
+      );
+    setBusy(false);
+    setMessage(error ? error.message : "Chamada concluída e enviada ao RH.");
+  }
+  async function createEmployee(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMessage("");
+    const { data: schedules } = await supabase
+      .from("work_schedules")
+      .select("id")
+      .eq("organization_id", data.organization.id)
+      .eq("active", true)
+      .limit(1);
+    const { data: created, error } = await supabase.functions.invoke(
+      "manage-user",
+      {
+        body: {
+          ...form,
+          cbo_code: normalizeCbo(form.cbo_code),
+          organization_id: data.organization.id,
+          department_id: departmentId,
+          schedule_id: schedules?.[0]?.id || null,
+          role: "employee",
+        },
+      },
+    );
+    setBusy(false);
+    if (error)
+      return setMessage(
+        await functionErrorMessage(error, "Não foi possível cadastrar."),
+      );
+    setForm({
+      full_name: "",
+      cpf: "",
+      employee_code: "",
+      username: "",
+      job_title: "",
+      cbo_code: "",
+      cbo_title: "",
+      password: "",
+    });
+    setShowCreate(false);
+    setAccessInfo(created);
+    setMessage("Acesso criado. Copie os dados abaixo e envie ao funcionário.");
+    load();
+  }
+  function showAccess(person: any) {
+    setMessage("");
+    setAccessInfo({ employee_id: person.id, full_name: person.full_name, company_code: data.organization.company_code, username: person.username, temporary_password: null });
+  }
+  async function resetAccess() {
+    if (!accessInfo?.employee_id || !window.confirm(`Gerar uma nova senha provisória para ${accessInfo.full_name}?`)) return;
+    setBusy(true);
+    const { data: created, error } = await supabase.functions.invoke("manage-user", { body: { action: "reset_access", organization_id: data.organization.id, employee_id: accessInfo.employee_id } });
+    setBusy(false);
+    if (error) return setMessage(await functionErrorMessage(error, "Não foi possível gerar uma nova senha."));
+    setAccessInfo(created);
+    setMessage("Nova senha provisória gerada.");
+  }
+  async function copyAccess() {
+    if (!accessInfo?.temporary_password) return;
+    await navigator.clipboard.writeText(`PontoNorte\nEmpresa: ${accessInfo.company_code}\nUsuário: ${accessInfo.username}\nSenha provisória: ${accessInfo.temporary_password}`);
+    setMessage("Dados de acesso copiados.");
+  }
+  function beginEdit(person: any) {
+    setEditing(person);
+    setEditForm({
+      full_name: person.full_name,
+      cpf: person.cpf || "",
+      employee_code: person.employee_code,
+      job_title: person.job_title || "",
+      cbo_code: formatCbo(person.cbo_code),
+      cbo_title: person.cbo_title || "",
+      phone: person.phone || "",
+    });
+  }
+  async function saveEmployee(e: FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    setBusy(true);
+    setMessage("");
+    const { error } = await supabase.functions.invoke("manage-user", {
+      body: {
+        ...editForm,
+        action: "update",
+        organization_id: data.organization.id,
+        employee_id: editing.id,
+        cbo_code: normalizeCbo(editForm.cbo_code),
+        department_id: editing.department_id,
+        schedule_id: editing.schedule_id,
+      },
+    });
+    setBusy(false);
+    if (error)
+      return setMessage(
+        await functionErrorMessage(error, "Não foi possível atualizar."),
+      );
+    setEditing(null);
+    setMessage("Ficha atualizada com sucesso.");
+    load();
+  }
+  async function ownClock() {
+    setBusy(true);
+    setMessage("");
+    try {
+      const method = data.methods.find(
+        (m) => m.method === "mobile" && m.enabled,
+      );
+      if (!method)
+        throw new Error("O ponto pelo aplicativo não está habilitado.");
+      let coords: any = {};
+      if (method.require_location) {
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 15000,
+        });
+        coords = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy_meters: pos.coords.accuracy,
+        };
+      }
+      const { data: response, error } = await supabase.functions.invoke(
+        "clock-event",
+        {
+          body: {
+            method: "mobile",
+            client_event_id: crypto.randomUUID(),
+            device_uuid: data.device.device_uuid,
+            app_version: "1.1.0",
+            ...coords,
+          },
+        },
+      );
+      if (error)
+        throw new Error(
+          await functionErrorMessage(error, "Não foi possível registrar."),
+        );
+      setMessage(
+        `${labels[response.entry.event_type]} registrada às ${clock(response.entry.occurred_at)}.`,
+      );
+      reload();
+    } catch (e) {
+      setMessage(
+        e instanceof Error ? e.message : "Não foi possível registrar.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  const feedback = message && (
+    <p
+      className={
+        message.includes("sucesso") ||
+        message.includes("concluída") ||
+        message.includes("registrada") ||
+        message.includes("QR")
+          ? "notice success"
+          : "notice"
+      }
+    >
+      {message}
+    </p>
+  );
+  return (
+    <main className="screen manager-app app">
+      <header className="top">
+        <Brand />
+        <button className="link" onClick={() => logoutApp()}>
+          Sair
+        </button>
+      </header>
+      <section key={tab} className="content page-transition">
+        {tab === "summary" && (
+          <>
+            <p className="greeting">
+              {data.member.role === "manager"
+                ? "Visão do meu setor"
+                : "Visão da empresa"}
+            </p>
+            <h1>Olá, {data.employee.full_name.split(" ")[0]}</h1>
+            <div className="manager-metrics">
+              <article>
+                <b>{active.length}</b>
+                <span>Ativos</span>
+              </article>
+              <article>
+                <b>{present.size}</b>
+                <span>Presentes</span>
+              </article>
+              <article>
+                <b>{Math.max(0, active.length - present.size)}</b>
+                <span>Sem ponto</span>
+              </article>
+            </div>
+            <div className="manager-shortcuts">
+              {data.member.role === "platform_admin" && (
+                <button className="card" onClick={() => setTab("companies")}>
+                  <Building2 />
+                  <span>
+                    <b>Empresas</b>
+                    <small>
+                      {companies.length} cadastro
+                      {companies.length === 1 ? "" : "s"} na plataforma
+                    </small>
+                  </span>
+                </button>
+              )}
+              <button className="card" onClick={() => setTab("clock")}>
+                <Clock3 />
+                <span>
+                  <b>Meu ponto</b>
+                  <small>Registrar entrada ou saída</small>
+                </span>
+              </button>
+              <button className="card" onClick={() => setTab("call")}>
+                <ClipboardCheck />
+                <span>
+                  <b>Fazer chamada</b>
+                  <small>Conferir presença do setor</small>
+                </span>
+              </button>
+              <button className="card" onClick={() => setTab("team")}>
+                <UsersRound />
+                <span>
+                  <b>Minha equipe</b>
+                  <small>Cadastrar e editar pessoas</small>
+                </span>
+              </button>
+            </div>
+          </>
+        )}
+        {tab === "clock" && (
+          <>
+            <p className="greeting">Registro pessoal</p>
+            <h1>Meu ponto</h1>
+            <article className="clock-card compact-clock">
+              <p>Próximo registro pelo aplicativo</p>
+              <button className="primary" onClick={ownClock} disabled={busy}>
+                <Clock3 />
+                {busy ? "Registrando…" : "Registrar meu ponto"}
+              </button>
+            </article>
+            <article className="card today">
+              <header>
+                <h2>Meus registros de hoje</h2>
+                <span>{data.entries.length}/4</span>
+              </header>
+              {["entry", "break_start", "break_end", "exit"].map((type) => {
+                const entry = data.entries.find(
+                  (item) => item.event_type === type,
+                );
+                return (
+                  <div key={type}>
+                    <span className={entry ? "done" : ""}>
+                      {entry && <Check />}
+                    </span>
+                    <p>
+                      <b>{labels[type]}</b>
+                      <small>
+                        {entry
+                          ? methodLabels[entry.method]
+                          : "Ainda não registrado"}
+                      </small>
+                    </p>
+                    <time>{entry ? clock(entry.occurred_at) : "—"}</time>
+                  </div>
+                );
+              })}
+            </article>
+            {feedback}
+          </>
+        )}
+        {tab === "call" && (
+          <>
+            <p className="greeting">Conferência do setor</p>
+            <h1>Chamada de hoje</h1>
+            {feedback}
+            <article className="card mobile-call">
+              <header>
+                <div>
+                  <h2>{active.length} funcionários</h2>
+                  <small>O ponto já identifica quem está presente.</small>
+                </div>
+                <button onClick={finishCall} disabled={busy}>
+                  Concluir
+                </button>
+              </header>
+              {active.map((p) => (
+                <div key={p.id}>
+                  <span className="avatar">
+                    {p.full_name
+                      .split(" ")
+                      .slice(0, 2)
+                      .map((x: string) => x[0])
+                      .join("")}
+                  </span>
+                  <p>
+                    <b>{p.full_name}</b>
+                    <small>
+                      {present.has(p.id)
+                        ? "Ponto identificado"
+                        : "Sem registro hoje"}
+                    </small>
+                  </p>
+                  <select
+                    value={
+                      marks[p.id] || (present.has(p.id) ? "present" : "absent")
+                    }
+                    onChange={(e) =>
+                      setMarks({ ...marks, [p.id]: e.target.value })
+                    }
+                  >
+                    <option value="present">Presente</option>
+                    <option value="late">Atraso</option>
+                    <option value="absent">Ausente</option>
+                    <option value="excused">Justificado</option>
+                  </select>
+                </div>
+              ))}
+            </article>
+          </>
+        )}
+        {tab === "companies" && data.member.role === "platform_admin" && (
+          <>
+            <div className="mobile-section-head">
+              <div>
+                <p className="greeting">Administração geral</p>
+                <h1>Empresas</h1>
+              </div>
+            </div>
+            <p className="notice success">
+              Este painel não exige autorização de dispositivo para o
+              administrador geral.
+            </p>
+            <div className="team-list">
+              {companies.map((company) => (
+                <article className="card" key={company.id}>
+                  <span className="avatar">
+                    <Building2 />
+                  </span>
+                  <p>
+                    <b>{company.trade_name}</b>
+                    <small>
+                      {company.company_code} ·{" "}
+                      {company.license_status === "active"
+                        ? "Ativa"
+                        : "Pendente ou suspensa"}
+                      {company.paid_until ? ` · até ${company.paid_until}` : ""}
+                    </small>
+                  </p>
+                </article>
+              ))}
+            </div>
+            <a
+              className="primary admin-web-link"
+              href="https://delta-1.github.io/PontoNorte/#empresas"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Building2 />
+              Abrir administração completa
+            </a>
+          </>
+        )}
+        {tab === "team" && (
+          <>
+            <div className="mobile-section-head">
+              <div>
+                <p className="greeting">Cadastros do setor</p>
+                <h1>Equipe</h1>
+              </div>
+              <button
+                className="outline small-action"
+                onClick={() => {
+                  setEditing(null);
+                  setMessage("");
+                  setShowCreate((value) => !value);
+                }}
+              >
+                <UserRound />
+                {showCreate ? "Fechar" : "Novo"}
+              </button>
+            </div>
+            {feedback}
+            {showCreate && (
+              <div className="mobile-form-backdrop">
+                <form
+                  className="mobile-employee-sheet"
+                  onSubmit={createEmployee}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="mobile-new-employee-title"
+                >
+                  <header className="mobile-employee-sheet-head">
+                    <div>
+                      <small>Novo cadastro</small>
+                      <h2 id="mobile-new-employee-title">
+                        Adicionar funcionário
+                      </h2>
+                      <p>
+                        Crie o acesso. No primeiro login, o funcionário completa
+                        contato e endereço.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="mobile-sheet-close"
+                      onClick={() => setShowCreate(false)}
+                      aria-label="Fechar cadastro"
+                    >
+                      <X />
+                    </button>
+                  </header>
+                  <div className="mobile-employee-form-body">
+                    <section className="mobile-form-section">
+                      <h3>
+                        <span>1</span>Identificação
+                      </h3>
+                      <Field label="Nome completo">
+                        <input
+                          autoComplete="name"
+                          required
+                          value={form.full_name}
+                          onChange={(e) =>
+                            setForm({ ...form, full_name: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="CPF (opcional agora)">
+                        <input
+                          inputMode="numeric"
+                          maxLength={14}
+                          placeholder="Pode ser completado depois pelo RH"
+                          value={form.cpf}
+                          onChange={(e) =>
+                            setForm({ ...form, cpf: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <div className="two-fields">
+                        <Field label="Matrícula">
+                          <input
+                            required
+                            value={form.employee_code}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                employee_code: e.target.value,
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field label="Usuário">
+                          <input
+                            required
+                            autoCapitalize="none"
+                            autoComplete="username"
+                            value={form.username}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                username: e.target.value.toLowerCase(),
+                              })
+                            }
+                          />
+                        </Field>
+                      </div>
+                    </section>
+                    <section className="mobile-form-section">
+                      <h3>
+                        <span>2</span>Trabalho
+                      </h3>
+                      <Field label="Cargo">
+                        <input
+                          value={form.job_title}
+                          onChange={(e) =>
+                            setForm({ ...form, job_title: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <div className="two-fields">
+                        <Field label="CBO">
+                          <input
+                            list="mobile-cbo-create"
+                            inputMode="numeric"
+                            placeholder="4110-10"
+                            value={form.cbo_code}
+                            onChange={(e) => {
+                              const code = formatCbo(e.target.value);
+                              setForm({
+                                ...form,
+                                cbo_code: code,
+                                cbo_title: cboTitleFor(code) || form.cbo_title,
+                              });
+                            }}
+                          />
+                        </Field>
+                        <Field label="Ocupação">
+                          <input
+                            value={form.cbo_title}
+                            onChange={(e) =>
+                              setForm({ ...form, cbo_title: e.target.value })
+                            }
+                          />
+                        </Field>
+                      </div>
+                      <datalist id="mobile-cbo-create">
+                        {commonCboOptions.map((item) => (
+                          <option key={item.code} value={formatCbo(item.code)}>
+                            {item.title}
+                          </option>
+                        ))}
+                      </datalist>
+                    </section>
+                    <section className="mobile-form-section">
+                      <h3>
+                        <span>3</span>Acesso
+                      </h3>
+                      <Field label="Senha inicial (opcional)">
+                        <PasswordInput
+                          minLength={8}
+                          autoComplete="new-password"
+                          placeholder="Em branco, o sistema gera uma senha"
+                          value={form.password}
+                          onChange={(e) =>
+                            setForm({ ...form, password: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <p className="notice">
+                        O funcionário trocará a senha provisória no primeiro
+                        acesso.
+                      </p>
+                    </section>
+                    {message && (
+                      <p className="mobile-form-feedback">{message}</p>
+                    )}
+                  </div>
+                  <footer className="mobile-employee-sheet-actions">
+                    <button
+                      type="button"
+                      className="outline"
+                      onClick={() => setShowCreate(false)}
+                    >
+                      Cancelar
+                    </button>
+                    <button className="primary" disabled={busy}>
+                      {busy ? "Cadastrando…" : "Cadastrar e gerar QR"}
+                    </button>
+                  </footer>
+                </form>
+              </div>
+            )}
+            {editing && (
+              <form className="card mobile-create" onSubmit={saveEmployee}>
+                <h2>Editar funcionário</h2>
+                <Field label="Nome completo">
+                  <input
+                    required
+                    value={editForm.full_name}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, full_name: e.target.value })
+                    }
+                  />
+                </Field>
+                <div className="two-fields">
+                  <Field label="Matrícula">
+                    <input
+                      required
+                      value={editForm.employee_code}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          employee_code: e.target.value,
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="CPF">
+                    <input
+                      inputMode="numeric"
+                      value={editForm.cpf}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, cpf: e.target.value })
+                      }
+                    />
+                  </Field>
+                </div>
+                <Field label="Cargo">
+                  <input
+                    value={editForm.job_title}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, job_title: e.target.value })
+                    }
+                  />
+                </Field>
+                <div className="two-fields">
+                  <Field label="CBO">
+                    <input
+                      inputMode="numeric"
+                      value={editForm.cbo_code}
+                      onChange={(e) => {
+                        const code = formatCbo(e.target.value);
+                        setEditForm({
+                          ...editForm,
+                          cbo_code: code,
+                          cbo_title: cboTitleFor(code) || editForm.cbo_title,
+                        });
+                      }}
+                    />
+                  </Field>
+                  <Field label="Ocupação">
+                    <input
+                      value={editForm.cbo_title}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, cbo_title: e.target.value })
+                      }
+                    />
+                  </Field>
+                </div>
+                <Field label="Telefone">
+                  <input
+                    value={editForm.phone}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, phone: e.target.value })
+                    }
+                  />
+                </Field>
+                <div className="two-fields">
+                  <button
+                    type="button"
+                    className="outline"
+                    onClick={() => setEditing(null)}
+                  >
+                    Cancelar
+                  </button>
+                  <button className="primary" disabled={busy}>
+                    Salvar
+                  </button>
+                </div>
+              </form>
+            )}
+            {accessInfo && (
+              <article className="card mobile-access-card">
+                <header><div><small>Acesso do funcionário</small><h2>{accessInfo.full_name}</h2></div><button className="link" onClick={() => setAccessInfo(null)}><X /></button></header>
+                <dl><div><dt>Empresa</dt><dd>{accessInfo.company_code}</dd></div><div><dt>Usuário</dt><dd>{accessInfo.username}</dd></div>{accessInfo.temporary_password && <div><dt>Senha provisória</dt><dd>{accessInfo.temporary_password}</dd></div>}</dl>
+                {!accessInfo.temporary_password && <p className="notice">A senha atual não pode ser exibida. Gere outra somente se o funcionário perdeu o acesso.</p>}
+                <div className="two-fields">{accessInfo.temporary_password && <button className="outline" onClick={copyAccess}><Copy />Copiar</button>}<button className="primary" disabled={busy} onClick={resetAccess}><KeyRound />{busy ? "Gerando…" : "Nova senha"}</button></div>
+              </article>
+            )}
+            <div className="team-list">
+              {active.map((person) => (
+                <article className="card" key={person.id}>
+                  <span className="avatar">
+                    {person.full_name
+                      .split(" ")
+                      .slice(0, 2)
+                      .map((part: string) => part[0])
+                      .join("")}
+                  </span>
+                  <p>
+                    <b>{person.full_name}</b>
+                    <small>
+                      {person.job_title || "Sem cargo"}
+                      {person.cbo_code
+                        ? ` · CBO ${formatCbo(person.cbo_code)}`
+                        : ""}
+                    </small>
+                  </p>
+                  <button
+                    className="link"
+                    onClick={() => {
+                      setShowCreate(false);
+                      beginEdit(person);
+                    }}
+                  >
+                    <Pencil />
+                    Editar
+                  </button>
+                  <button className="link" onClick={() => showAccess(person)}>
+                    <KeyRound />
+                    Acesso
+                  </button>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+      <ManagementNav
+        tab={tab}
+        setTab={setTab}
+        platformAdmin={data.member.role === "platform_admin"}
+      />
+    </main>
+  );
+}
+
+function ManagementNav({
+  tab,
+  setTab,
+  platformAdmin,
+}: {
+  tab: "summary" | "companies" | "clock" | "call" | "team";
+  setTab: (value: "summary" | "companies" | "clock" | "call" | "team") => void;
+  platformAdmin: boolean;
+}) {
+  const tabs = platformAdmin
+    ? ["summary", "companies", "clock", "call", "team"]
+    : ["summary", "clock", "call", "team"];
+  const index = Math.max(0, tabs.indexOf(tab));
+  return (
+    <nav
+      className={"nav fluid-nav " + (platformAdmin ? "admin-nav" : "")}
+      style={
+        { "--nav-index": index, "--nav-count": tabs.length } as CSSProperties
+      }
+    >
+      <span className="nav-fluid-highlight" aria-hidden="true" />
+      <button
+        className={tab === "summary" ? "active" : ""}
+        onClick={() => setTab("summary")}
+      >
+        <LayoutDashboard />
+        <span>Resumo</span>
+      </button>
+      {platformAdmin && (
+        <button
+          className={tab === "companies" ? "active" : ""}
+          onClick={() => setTab("companies")}
+        >
+          <Building2 />
+          <span>Empresas</span>
+        </button>
+      )}
+      <button
+        className={tab === "clock" ? "active" : ""}
+        onClick={() => setTab("clock")}
+      >
+        <Clock3 />
+        <span>Ponto</span>
+      </button>
+      <button
+        className={tab === "call" ? "active" : ""}
+        onClick={() => setTab("call")}
+      >
+        <ClipboardCheck />
+        <span>Chamada</span>
+      </button>
+      <button
+        className={tab === "team" ? "active" : ""}
+        onClick={() => setTab("team")}
+      >
+        <UsersRound />
+        <span>Equipe</span>
+      </button>
+    </nav>
+  );
+}
+
+function Home({ data, reload }: { data: AppData; reload: () => void }) {
+  type EmployeeTab = "home" | "history" | "justification" | "profile";
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
+  const [tab, setTab] = useState<EmployeeTab>(
+    () =>
+      (localStorage.getItem("pontonorte_employee_tab") as EmployeeTab) ||
+      "home",
+  );
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    job_title: data.employee.job_title || "",
+    cbo_code: formatCbo(data.employee.cbo_code),
+    cbo_title: data.employee.cbo_title || "",
+    phone: data.employee.phone || "",
+    email: data.employee.email || "",
+  });
+  const next = ["entry", "break_start", "break_end", "exit"][
+    Math.min(data.entries.length, 3)
+  ];
+  useEffect(() => {
+    localStorage.setItem("pontonorte_employee_tab", tab);
+  }, [tab]);
+  async function getLocation() {
+    const permission = await Geolocation.requestPermissions();
+    if (permission.location === "denied")
+      throw new Error("Autorize a localização nas configurações do celular.");
+    const pos = await Geolocation.getCurrentPosition({
+      enableHighAccuracy: true,
+      timeout: 15000,
+    });
+    return {
+      latitude: pos.coords.latitude,
+      longitude: pos.coords.longitude,
+      accuracy_meters: pos.coords.accuracy,
+    };
+  }
+  async function record(method: "mobile" | "qr_code" | "face") {
+    setBusy(method);
+    setMessage("");
+    try {
+      const coords = await getLocation();
+      let qr_token: string | undefined;
+      if (method === "qr_code") {
+        const result = await (
+          BarcodeModule as any
+        ).CapacitorBarcodeScanner.scanBarcode({
+          hint: 17,
+          scanInstructions: "Aponte para o seu QR Code individual",
+        });
+        if (!result.ScanResult) throw new Error("Nenhum QR Code foi lido.");
+        qr_token = result.ScanResult;
+      }
+      if (method === "face")
+        throw new Error(
+          "A empresa ainda precisa configurar o provedor de prova de vida.",
+        );
+      const client_event_id = crypto.randomUUID();
+      const { data: response, error } = await supabase.functions.invoke(
+        "clock-event",
+        {
+          body: {
+            method,
+            client_event_id,
+            device_uuid: data.device.device_uuid,
+            app_version: "1.0.0",
+            qr_token,
+            ...coords,
+          },
+        },
+      );
+      if (error)
+        throw new Error(
+          await functionErrorMessage(
+            error,
+            "Não foi possível registrar o ponto.",
+          ),
+        );
+      if (response?.error) throw new Error(response.error);
+      setMessage(
+        `${labels[response.entry.event_type]} registrada às ${clock(response.entry.occurred_at)}.`,
+      );
+      reload();
+    } catch (e) {
+      setMessage(
+        e instanceof Error ? e.message : "Não foi possível registrar.",
+      );
+    } finally {
+      setBusy("");
+    }
+  }
+  async function saveProfile(e: FormEvent) {
+    e.preventDefault();
+    setBusy("profile");
+    setMessage("");
+    const { error } = await supabase.functions.invoke("manage-user", {
+      body: {
+        ...profileForm,
+        action: "update",
+        organization_id: data.organization.id,
+        employee_id: data.employee.id,
+        cbo_code: normalizeCbo(profileForm.cbo_code),
+      },
+    });
+    setBusy("");
+    if (error)
+      return setMessage(
+        await functionErrorMessage(
+          error,
+          "Não foi possível atualizar seu perfil.",
+        ),
+      );
+    setEditingProfile(false);
+    setMessage("Perfil atualizado com sucesso.");
+    reload();
+  }
+  if (tab === "history")
+    return (
+      <main className="screen app">
+        <Top data={data} />
+        <section key="history" className="content page-transition">
+          <h1>Meus pontos</h1>
+          <p className="subtitle">Histórico de hoje</p>
+          <div className="card timeline">
+            {data.entries.length ? (
+              data.entries.map((e) => (
+                <div key={e.id}>
+                  <span className="done">
+                    <Check />
+                  </span>
+                  <p>
+                    <b>{labels[e.event_type]}</b>
+                    <small>{methodLabels[e.method] || e.method}</small>
+                  </p>
+                  <time>{clock(e.occurred_at)}</time>
+                </div>
+              ))
+            ) : (
+              <p>Nenhum registro hoje.</p>
+            )}
+          </div>
+        </section>
+        <Nav tab={tab} setTab={setTab} />
+      </main>
+    );
+  if (tab === "justification")
+    return (
+      <Justifications data={data} reload={reload} tab={tab} setTab={setTab} />
+    );
+  if (tab === "profile")
+    return (
+      <main className="screen app">
+        <Top data={data} />
+        <section key="profile" className="content page-transition">
+          <div className="mobile-section-head">
+            <h1>Meu perfil</h1>
+            <button
+              className="link"
+              onClick={() => setEditingProfile((value) => !value)}
+            >
+              <Pencil />
+              {editingProfile ? "Fechar" : "Editar"}
+            </button>
+          </div>
+          {message && (
+            <p
+              className={
+                message.includes("sucesso") ? "notice success" : "notice"
+              }
+            >
+              {message}
+            </p>
+          )}
+          {editingProfile ? (
+            <form
+              className="card mobile-create profile-edit"
+              onSubmit={saveProfile}
+            >
+              <Field label="Cargo na empresa">
+                <input
+                  value={profileForm.job_title}
+                  onChange={(e) =>
+                    setProfileForm({
+                      ...profileForm,
+                      job_title: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Código CBO">
+                <input
+                  list="employee-cbo-options"
+                  inputMode="numeric"
+                  placeholder="4110-10"
+                  value={profileForm.cbo_code}
+                  onChange={(e) => {
+                    const code = formatCbo(e.target.value);
+                    setProfileForm({
+                      ...profileForm,
+                      cbo_code: code,
+                      cbo_title: cboTitleFor(code) || profileForm.cbo_title,
+                    });
+                  }}
+                />
+              </Field>
+              <Field label="Ocupação CBO">
+                <input
+                  value={profileForm.cbo_title}
+                  onChange={(e) =>
+                    setProfileForm({
+                      ...profileForm,
+                      cbo_title: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <datalist id="employee-cbo-options">
+                {commonCboOptions.map((item) => (
+                  <option key={item.code} value={formatCbo(item.code)}>
+                    {item.title}
+                  </option>
+                ))}
+              </datalist>
+              <Field label="Telefone">
+                <input
+                  value={profileForm.phone}
+                  onChange={(e) =>
+                    setProfileForm({ ...profileForm, phone: e.target.value })
+                  }
+                />
+              </Field>
+              <Field label="E-mail pessoal">
+                <input
+                  type="email"
+                  value={profileForm.email}
+                  onChange={(e) =>
+                    setProfileForm({ ...profileForm, email: e.target.value })
+                  }
+                />
+              </Field>
+              <button className="primary" disabled={busy === "profile"}>
+                {busy === "profile" ? "Salvando…" : "Salvar alterações"}
+              </button>
+            </form>
+          ) : (
+            <div className="card profile">
+              <span>
+                {data.employee.full_name
+                  .split(" ")
+                  .slice(0, 2)
+                  .map((x: string) => x[0])
+                  .join("")}
+              </span>
+              <h2>{data.employee.full_name}</h2>
+              <p>{data.employee.job_title || "Funcionário"}</p>
+              <dl>
+                <div>
+                  <dt>Empresa</dt>
+                  <dd>{data.organization.trade_name}</dd>
+                </div>
+                <div>
+                  <dt>Código</dt>
+                  <dd>{data.organization.company_code}</dd>
+                </div>
+                <div>
+                  <dt>Matrícula</dt>
+                  <dd>{data.employee.employee_code}</dd>
+                </div>
+                <div>
+                  <dt>CBO</dt>
+                  <dd>
+                    {data.employee.cbo_code
+                      ? formatCbo(data.employee.cbo_code)
+                      : "Não informado"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Função CBO</dt>
+                  <dd>{data.employee.cbo_title || "Não informada"}</dd>
+                </div>
+              </dl>
+              <button className="outline" onClick={() => logoutApp()}>
+                <LogOut />
+                Sair
+              </button>
+            </div>
+          )}
+        </section>
+        <Nav tab={tab} setTab={setTab} />
+      </main>
+    );
+  return (
+    <main className="screen app">
+      <Top data={data} />
+      <section key="home" className="content page-transition">
+        <p className="greeting">Olá, {data.employee.full_name.split(" ")[0]}</p>
+        <h1>Seu dia de trabalho</h1>
+        <article className="clock-card">
+          <header>
+            <span>
+              <CalendarDays />{" "}
+              {new Intl.DateTimeFormat("pt-BR", {
+                weekday: "long",
+                day: "2-digit",
+                month: "short",
+              }).format(new Date())}
+            </span>
+            <i>Online</i>
+          </header>
+          <time>
+            {new Intl.DateTimeFormat("pt-BR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }).format(new Date())}
+          </time>
+          <p>
+            Próximo registro: <b>{labels[next]}</b>
+          </p>
+          <div className="methods">
+            {data.methods
+              .filter(
+                (m) =>
+                  m.enabled && ["mobile", "qr_code", "face"].includes(m.method),
+              )
+              .map((m) => (
+                <button
+                  key={m.method}
+                  disabled={!!busy || data.entries.length >= 4}
+                  onClick={() => record(m.method)}
+                >
+                  {m.method === "qr_code" ? (
+                    <QrCode />
+                  ) : m.method === "face" ? (
+                    <Fingerprint />
+                  ) : (
+                    <Smartphone />
+                  )}
+                  <span>{methodLabels[m.method]}</span>
+                  {busy === m.method && <RefreshCw className="spin" />}
+                </button>
+              ))}
+          </div>
+        </article>
+        {message && (
+          <div
+            className={
+              message.includes("registrada") ? "notice success" : "notice"
+            }
+          >
+            {message}
+          </div>
+        )}
+        <article className="card location">
+          <MapPin />
+          <p>
+            <b>Localização protegida</b>
+            <small>
+              Usada apenas na validação do registro, conforme regras da empresa.
+            </small>
+          </p>
+        </article>
+        <article className="card today">
+          <header>
+            <h2>Registros de hoje</h2>
+            <span>{data.entries.length}/4</span>
+          </header>
+          {["entry", "break_start", "break_end", "exit"].map((type) => {
+            const e = data.entries.find((x) => x.event_type === type);
+            return (
+              <div key={type}>
+                <span className={e ? "done" : ""}>{e && <Check />}</span>
+                <p>
+                  <b>{labels[type]}</b>
+                  <small>
+                    {e ? methodLabels[e.method] : "Ainda não registrado"}
+                  </small>
+                </p>
+                <time>{e ? clock(e.occurred_at) : "—"}</time>
+              </div>
+            );
+          })}
+        </article>
+      </section>
+      <Nav tab={tab} setTab={setTab} />
+    </main>
+  );
+}
+
+function Top({ data }: { data: AppData }) {
+  return (
+    <header className="top">
+      <Brand />
+      <span className="avatar">
+        {data.employee.full_name
+          .split(" ")
+          .slice(0, 2)
+          .map((x: string) => x[0])
+          .join("")}
+      </span>
+    </header>
+  );
+}
+function Justifications({
+  data,
+  reload,
+  tab,
+  setTab,
+}: {
+  data: AppData;
+  reload: () => void;
+  tab: string;
+  setTab: (v: "home" | "history" | "justification" | "profile") => void;
+}) {
+  const [kind, setKind] = useState("Atestado médico");
+  const [reason, setReason] = useState("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [message, setMessage] = useState("");
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setMessage("");
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    let document_path: string | null = null;
+    if (file) {
+      document_path = `${data.organization.id}/${data.employee.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const { error } = await supabase.storage
+        .from("documents")
+        .upload(document_path, file);
+      if (error) return setMessage(error.message);
+    }
+    const { error } = await supabase
+      .from("justifications")
+      .insert({
+        organization_id: data.organization.id,
+        employee_id: data.employee.id,
+        kind,
+        reason,
+        starts_at: new Date(start).toISOString(),
+        ends_at: new Date(end).toISOString(),
+        document_path,
+        created_by: user.id,
+      });
+    if (error) return setMessage(error.message);
+    setMessage("Justificativa enviada ao RH.");
+    setReason("");
+    setFile(null);
+    reload();
+  }
+  return (
+    <main className="screen app">
+      <Top data={data} />
+      <section key="justification" className="content page-transition">
+        <h1>Justificativas</h1>
+        <form className="card justify-form" onSubmit={submit}>
+          <Field label="Tipo">
+            <select value={kind} onChange={(e) => setKind(e.target.value)}>
+              <option>Atestado médico</option>
+              <option>Declaração</option>
+              <option>Esquecimento de ponto</option>
+              <option>Outro</option>
+            </select>
+          </Field>
+          <Field label="Motivo">
+            <textarea
+              required
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </Field>
+          <Field label="Início">
+            <input
+              required
+              type="datetime-local"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+            />
+          </Field>
+          <Field label="Fim">
+            <input
+              required
+              type="datetime-local"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+            />
+          </Field>
+          <Field label="Documento">
+            <input
+              type="file"
+              accept="application/pdf,image/jpeg,image/png"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+          </Field>
+          {message && (
+            <p
+              className={
+                message.includes("enviada") ? "notice success" : "notice"
+              }
+            >
+              {message}
+            </p>
+          )}
+          <button className="primary">
+            <FileCheck2 />
+            Enviar ao RH
+          </button>
+        </form>
+        <div className="card requests">
+          {data.justifications.map((j) => (
+            <div key={j.id}>
+              <p>
+                <b>{j.kind}</b>
+                <small>
+                  {new Date(j.starts_at).toLocaleDateString("pt-BR")}
+                </small>
+              </p>
+              <span className={j.status}>{j.status}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+      <Nav tab={tab} setTab={setTab} />
+    </main>
+  );
+}
+function Nav({
+  tab,
+  setTab,
+}: {
+  tab: string;
+  setTab: (v: "home" | "history" | "justification" | "profile") => void;
+}) {
+  const tabs = ["home", "history", "justification", "profile"];
+  const index = Math.max(0, tabs.indexOf(tab));
+  return (
+    <nav
+      className="nav fluid-nav"
+      style={{ "--nav-index": index } as CSSProperties}
+    >
+      <span className="nav-fluid-highlight" aria-hidden="true" />
+      <button
+        className={tab === "home" ? "active" : ""}
+        onClick={() => setTab("home")}
+      >
+        <Clock3 />
+        <span>Ponto</span>
+      </button>
+      <button
+        className={tab === "history" ? "active" : ""}
+        onClick={() => setTab("history")}
+      >
+        <History />
+        <span>Histórico</span>
+      </button>
+      <button
+        className={tab === "justification" ? "active" : ""}
+        onClick={() => setTab("justification")}
+      >
+        <FileCheck2 />
+        <span>Justificar</span>
+      </button>
+      <button
+        className={tab === "profile" ? "active" : ""}
+        onClick={() => setTab("profile")}
+      >
+        <UserRound />
+        <span>Perfil</span>
+      </button>
+    </nav>
+  );
+}
+
+function AppLock({ unlock, error }: { unlock: () => void; error: string }) {
+  return (
+    <main className="screen centered">
+      <Brand />
+      <span className="big-icon">
+        <Fingerprint />
+      </span>
+      <h1>Desbloquear PontoNorte</h1>
+      <p>
+        Confirme com a digital, reconhecimento do aparelho ou senha da tela de
+        bloqueio.
+      </p>
+      {error && <p className="error">{error}</p>}
+      <button className="primary" onClick={unlock}>
+        <Fingerprint />
+        Desbloquear
+      </button>
+      <button className="link" onClick={logoutApp}>
+        Entrar com outra conta
+      </button>
+    </main>
+  );
+}
+
+export default function App() {
+  const [data, setData] = useState<AppData | TerminalData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [locked, setLocked] = useState(false);
+  const [unlockError, setUnlockError] = useState("");
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user) {
+      setData(null);
+      setLocked(false);
+      setLoading(false);
+      return;
+    }
+    const keep = localStorage.getItem(KEEP_CONNECTED_KEY) === "true";
+    const unlocked = sessionStorage.getItem(UNLOCKED_KEY) === "true";
+    if (!keep && !unlocked) {
+      await supabase.auth.signOut();
+      setData(null);
+      setLocked(false);
+      setLoading(false);
+      return;
+    }
+    if (keep && Capacitor.isNativePlatform() && !unlocked) {
+      setLocked(true);
+      setLoading(false);
+      return;
+    }
+    const { data: member } = await supabase
+      .from("organization_members")
+      .select("role,organization_id,organizations(*)")
+      .eq("user_id", user.id)
+      .eq("active", true)
+      .limit(1)
+      .single();
+    if (member?.role === "terminal") {
+      const { data: terminal, error: terminalError } = await supabase
+        .from("terminals")
+        .select("*")
+        .eq("auth_user_id", user.id)
+        .single();
+      if (terminalError || !terminal) {
+        setError("Terminal não encontrado ou desativado.");
+        setLoading(false);
+        return;
+      }
+      const id = await Device.getId();
+      setData({
+        terminal,
+        organization: member.organizations,
+        deviceUuid: id.identifier,
+      });
+      setLoading(false);
+      return;
+    }
+    const { data: employee, error: e } = await supabase
+      .from("employees")
+      .select("*,organizations(*)")
+      .eq("auth_user_id", user.id)
+      .single();
+    if (e || !employee) {
+      setError("Vínculo de funcionário não encontrado.");
+      setLoading(false);
+      return;
+    }
+    const info = await Device.getInfo();
+    const id = await Device.getId();
+    let { data: device } = await supabase
+      .from("authorized_devices")
+      .select("*")
+      .eq("organization_id", employee.organization_id)
+      .eq("device_uuid", id.identifier)
+      .maybeSingle();
+    if (!device) {
+      const inserted = await supabase
+        .from("authorized_devices")
+        .insert({
+          organization_id: employee.organization_id,
+          employee_id: employee.id,
+          device_uuid: id.identifier,
+          device_name: info.model || "Celular Android",
+          platform: info.platform,
+          app_version: "1.0.0",
+        })
+        .select("*")
+        .single();
+      device = inserted.data;
+    }
+    const [meth, entries, justifications, employeeRecord] = await Promise.all([
+      supabase
+        .from("clock_methods")
+        .select("*")
+        .eq("organization_id", employee.organization_id),
+      supabase
+        .from("time_entries")
+        .select("*")
+        .eq("employee_id", employee.id)
+        .gte("occurred_at", dayStart())
+        .order("occurred_at"),
+      supabase
+        .from("justifications")
+        .select("*")
+        .eq("employee_id", employee.id)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("employee_records")
+        .select("id,data")
+        .eq("employee_id", employee.id)
+        .eq("template_key", "registro_empregado_br")
+        .maybeSingle(),
+    ]);
+    setData({
+      employee,
+      member,
+      organization: employee.organizations,
+      employeeRecord: employeeRecord.data ?? null,
+      methods: meth.data ?? [],
+      device,
+      entries: entries.data ?? [],
+      justifications: justifications.data ?? [],
+    });
+    setLoading(false);
+  }, []);
+  useEffect(() => {
+    reload();
+  }, [reload]);
+  useEffect(() => {
+    let hiddenAt = 0;
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenAt = Date.now();
+        return;
+      }
+      if (
+        hiddenAt &&
+        Date.now() - hiddenAt > 30000 &&
+        localStorage.getItem(KEEP_CONNECTED_KEY) === "true"
+      ) {
+        sessionStorage.removeItem(UNLOCKED_KEY);
+        setLocked(true);
+        setData(null);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+  const unlock = useCallback(async () => {
+    setUnlockError("");
+    try {
+      if (Capacitor.isNativePlatform())
+        await DeviceAuth.authenticate({
+          title: "Desbloquear PontoNorte",
+          subtitle: "Use sua digital, rosto ou a senha do celular",
+        });
+      sessionStorage.setItem(UNLOCKED_KEY, "true");
+      setLocked(false);
+      reload();
+    } catch {
+      setUnlockError(
+        "Não foi possível confirmar sua identidade. Tente novamente.",
+      );
+    }
+  }, [reload]);
+  const content = useMemo(() => {
+    if (locked) return <AppLock unlock={unlock} error={unlockError} />;
+    if (loading)
+      return (
+        <main className="screen centered">
+          <RefreshCw className="spin" />
+        </main>
+      );
+    if (error)
+      return (
+        <main className="screen centered">
+          <ShieldCheck />
+          <h1>Acesso indisponível</h1>
+          <p>{error}</p>
+          <button className="outline" onClick={() => logoutApp()}>
+            Sair
+          </button>
+        </main>
+      );
+    if (!data) return <Login reload={reload} />;
+    if ("terminal" in data) {
+      if (!licenseActive(data.organization))
+        return (
+          <main className="screen centered">
+            <ShieldCheck />
+            <h1>Licença pendente</h1>
+            <p>Peça ao administrador da empresa para renovar a licença.</p>
+            <button className="outline" onClick={() => logoutApp()}>
+              Sair
+            </button>
+          </main>
+        );
+      return <TerminalClock data={data} />;
+    }
+    if (data.employee.must_change_password)
+      return <Password employee={data.employee} reload={reload} />;
+    if (
+      data.member.role !== "platform_admin" &&
+      !licenseActive(data.organization)
+    )
+      return (
+        <main className="screen centered">
+          <ShieldCheck />
+          <h1>Licença pendente</h1>
+          <p>
+            Entre pelo site PontoNorte como administrador para informar o código
+            de ativação.
+          </p>
+          <button className="outline" onClick={() => logoutApp()}>
+            Sair
+          </button>
+        </main>
+      );
+    if (
+      data.member.role === "employee" &&
+      !data.employeeRecord?.data?.self_onboarding?.completed_at
+    )
+      return (
+        <EmployeeOnboarding
+          employee={data.employee}
+          organization={data.organization}
+          reload={reload}
+        />
+      );
+    if (
+      data.member.role !== "platform_admin" &&
+      data.organization.settings?.require_device_authorization &&
+      !data.device?.approved
+    )
+      return <PendingDevice data={data} reload={reload} />;
+    if (
+      [
+        "manager",
+        "hr_agent",
+        "hr_admin",
+        "company_owner",
+        "platform_admin",
+      ].includes(data.member.role)
+    )
+      return <ManagementApp data={data} reload={reload} />;
+    return <Home data={data} reload={reload} />;
+  }, [data, error, loading, locked, reload, unlock, unlockError]);
   return content;
 }
