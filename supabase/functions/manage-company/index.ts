@@ -30,11 +30,26 @@ Deno.serve(async (req) => {
     if (action === "delete") {
       if (orgId === platformAdmin.organization_id) return json({ error: "A conta principal do PontoNorte não pode ser excluída." }, 409);
       if (String(body.confirm_name ?? "").trim() !== String(organization.trade_name).trim()) return json({ error: "Confirme o nome exato da empresa para excluir." }, 400);
-      const [{ data: members }, { data: employees }, { data: terminals }] = await Promise.all([
+      const [{ data: members }, { data: employees }, { data: terminals }, { data: employeeFiles }, { data: documents }, { data: evidence }] = await Promise.all([
         admin.from("organization_members").select("user_id").eq("organization_id", orgId),
         admin.from("employees").select("auth_user_id").eq("organization_id", orgId).not("auth_user_id", "is", null),
         admin.from("terminals").select("auth_user_id").eq("organization_id", orgId).not("auth_user_id", "is", null),
+        admin.from("employees").select("avatar_path").eq("organization_id", orgId).not("avatar_path", "is", null),
+        admin.from("justifications").select("document_path").eq("organization_id", orgId).not("document_path", "is", null),
+        admin.from("time_entries").select("evidence_path").eq("organization_id", orgId).not("evidence_path", "is", null),
       ]);
+      const storedFiles = [
+        { bucket: "avatars", paths: (employeeFiles ?? []).map((row) => row.avatar_path) },
+        { bucket: "documents", paths: (documents ?? []).map((row) => row.document_path) },
+        { bucket: "clock-evidence", paths: (evidence ?? []).map((row) => row.evidence_path) },
+      ];
+      for (const group of storedFiles) {
+        const paths = [...new Set(group.paths.filter(Boolean))];
+        for (let offset = 0; offset < paths.length; offset += 100) {
+          const { error } = await admin.storage.from(group.bucket).remove(paths.slice(offset, offset + 100));
+          if (error) return json({ error: "Não foi possível apagar os arquivos vinculados à empresa." }, 409);
+        }
+      }
       const candidates = [...new Set([...(members ?? []).map((row) => row.user_id), ...(employees ?? []).map((row) => row.auth_user_id), ...(terminals ?? []).map((row) => row.auth_user_id)].filter(Boolean))];
       const { data: sharedMemberships } = candidates.length
         ? await admin.from("organization_members").select("user_id").in("user_id", candidates).neq("organization_id", orgId)
