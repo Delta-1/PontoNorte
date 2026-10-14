@@ -18,11 +18,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Usar somente o GitHub Actions como fonte do Pages
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow
-
       - name: Baixar código
         uses: actions/checkout@v4
 
