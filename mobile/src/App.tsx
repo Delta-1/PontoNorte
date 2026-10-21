@@ -1043,7 +1043,7 @@ function ManagementApp({
             method: "mobile",
             client_event_id: crypto.randomUUID(),
             device_uuid: data.device.device_uuid,
-            app_version: "1.1.0",
+            app_version: "1.1.1",
             ...coords,
           },
         },
@@ -1699,9 +1699,11 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
     localStorage.setItem("pontonorte_employee_tab", tab);
   }, [tab]);
   async function getLocation() {
-    const permission = await Geolocation.requestPermissions();
-    if (permission.location === "denied")
-      throw new Error("Autorize a localização nas configurações do celular.");
+    if (Capacitor.isNativePlatform()) {
+      const permission = await Geolocation.requestPermissions();
+      if (permission.location === "denied")
+        throw new Error("Autorize a localização nas configurações do celular.");
+    }
     const pos = await Geolocation.getCurrentPosition({
       enableHighAccuracy: true,
       timeout: 15000,
@@ -1716,7 +1718,9 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
     setBusy(method);
     setMessage("");
     try {
-      const coords = await getLocation();
+      const configuredMethod = data.methods.find((item) => item.method === method && item.enabled);
+      if (!configuredMethod) throw new Error("Este método não está habilitado pela empresa.");
+      const coords = configuredMethod.require_location ? await getLocation() : {};
       let qr_token: string | undefined;
       if (method === "qr_code") {
         const result = await (
@@ -1739,8 +1743,8 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
           body: {
             method,
             client_event_id,
-            device_uuid: data.device.device_uuid,
-            app_version: "1.0.0",
+            device_uuid: data.device?.device_uuid,
+            app_version: "1.1.1",
             qr_token,
             ...coords,
           },
@@ -1757,7 +1761,7 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
       setMessage(
         `${labels[response.entry.event_type]} registrada às ${clock(response.entry.occurred_at)}.`,
       );
-      reload();
+      await reload();
     } catch (e) {
       setMessage(
         e instanceof Error ? e.message : "Não foi possível registrar.",
@@ -2361,7 +2365,7 @@ export default function App() {
           device_uuid: id.identifier,
           device_name: info.model || "Celular Android",
           platform: info.platform,
-          app_version: "1.0.0",
+          app_version: "1.1.1",
         })
         .select("*")
         .single();
@@ -2510,7 +2514,7 @@ export default function App() {
     if (
       data.member.role !== "platform_admin" &&
       data.organization.settings?.require_device_authorization &&
-      !data.device?.approved
+      (!data.device?.approved || !!data.device?.revoked_at)
     )
       return <PendingDevice data={data} reload={reload} />;
     if (
