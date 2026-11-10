@@ -1,0 +1,4 @@
+# Administrative requests validate the user JWT and membership. Public requests
+# authenticate with an HMAC-signed, revocable, narrowly scoped invitation.
+[functions.team-access]
+verify_jwt = false

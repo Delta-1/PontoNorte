@@ -83,6 +83,8 @@ import {
 import QRCode from "qrcode";
 import { EmployeeRecordDialog } from "@/components/employee-record-dialog";
 import { EmployeeOnboarding } from "@/components/employee-onboarding";
+import { TeamAccessPanel, PublicTeamAccess } from "@/components/team-access";
+import { TodayActivity } from "@/components/today-activity";
 
 type Page =
   | "Hoje"
@@ -336,7 +338,12 @@ function Login({
 }) {
   const [signup, setSignup] = useState(false);
   const [forgot, setForgot] = useState(false);
+  const [linkedCompany, setLinkedCompany] = useState("");
   const [company, setCompany] = useState(() => savedLoginHint().company);
+  useEffect(() => {
+    const value = new URLSearchParams(location.search).get("empresa");
+    if (value && /^[A-Z0-9]{4,12}$/.test(value)) { setCompany(value); setLinkedCompany(value); }
+  }, []);
   const [username, setUsername] = useState(() => savedLoginHint().username);
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(() =>
@@ -378,10 +385,10 @@ function Login({
             <ShieldCheck />
           </span>
           <h1>Entrar</h1>
-          <p>Código da empresa, usuário e senha.</p>
+          <p>{linkedCompany ? "Entre com seu usuário e senha." : "Acesse sua empresa e acompanhe o ponto."}</p>
         </div>
         <form onSubmit={submit}>
-          <label>
+          {linkedCompany ? <div className="linked-company">Empresa {linkedCompany}<button type="button" onClick={() => setLinkedCompany("")}>Trocar</button></div> : <label>
             Código da empresa
             <Input
               required
@@ -395,7 +402,7 @@ function Login({
               autoCapitalize="characters"
               autoComplete="organization"
             />
-          </label>
+          </label>}
           <label>
             Usuário
             <Input
@@ -979,6 +986,7 @@ function Dashboard({ ctx }: { ctx: Context }) {
           new Date(),
         )}
       />
+      {["platform_admin", "company_owner", "hr_admin"].includes(ctx.member.role) && <TeamAccessPanel organizationId={ctx.organization.id} />}
       <section className="metrics">
         {[
           ["" + stats.employees, "Funcionários ativos", "Equipe cadastrada"],
@@ -996,16 +1004,7 @@ function Dashboard({ ctx }: { ctx: Context }) {
           </article>
         ))}
       </section>
-      <section className="permission-note">
-        <ShieldCheck />
-        <div>
-          <b>Operação em produção</b>
-          <p>
-            Os dados exibidos pertencem a {ctx.organization.trade_name}. Seu
-            acesso é limitado ao perfil {labels[ctx.member.role]}.
-          </p>
-        </div>
-      </section>
+      <TodayActivity organizationId={ctx.organization.id} timezone={ctx.organization.timezone || "America/Rio_Branco"} />
     </>
   );
 }
@@ -2348,12 +2347,11 @@ function Terminals({ ctx }: { ctx: Context }) {
     setForm({ ...form, password: "" });
     load();
   }
-  async function toggle(r: any) {
-    await supabase
-      .from("terminals")
-      .update({ enabled: !r.enabled })
-      .eq("id", r.id);
-    load();
+  async function updateTerminal(r: any, changes: { enabled?: boolean; device_uuid?: null }) {
+    setError("");
+    const { error } = await supabase.from("terminals").update(changes).eq("id", r.id).eq("organization_id", ctx.organization.id);
+    if (error) return setError("Não foi possível alterar o terminal.");
+    void load();
   }
   return (
     <>
@@ -2443,6 +2441,7 @@ function Terminals({ ctx }: { ctx: Context }) {
           ) : undefined
         }
       />
+      <ErrorBox message={error} />
       {saved && (
         <div className="success-banner">
           <Check />
@@ -2478,9 +2477,10 @@ function Terminals({ ctx }: { ctx: Context }) {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Button size="sm" variant="outline" onClick={() => toggle(r)}>
+                  <Button size="sm" variant="outline" onClick={() => updateTerminal(r, { enabled: !r.enabled })}>
                     {r.enabled ? "Desativar" : "Ativar"}
                   </Button>
+                  {r.device_uuid && ["platform_admin", "company_owner", "hr_admin"].includes(ctx.member.role) ? <Button size="sm" variant="outline" onClick={() => updateTerminal(r, { device_uuid: null })}>Liberar outro aparelho</Button> : null}
                 </TableCell>
               </TableRow>
             ))}
@@ -7735,6 +7735,7 @@ function DemoContent({
           title="Hoje"
           desc="Visão demonstrativa da operação em tempo real"
         />
+        <TeamAccessPanel demo />
         <section className="metrics">
           {[
             ["24", "Funcionários ativos", "Equipe cadastrada"],
@@ -8571,8 +8572,8 @@ function DemoApp({ onExit }: { onExit: () => void }) {
     setTimeout(() => setNotice(""), 4200);
   };
   return (
-    <main className="admin-shell demo-shell">
-      <aside className={"side " + (drawer ? "open" : "")}>
+    <main className="admin-shell demo-shell simple-workspace">
+      <aside className={"side " + (drawer ? "open" : "")} inert={!drawer} aria-hidden={!drawer}>
         <header>
           <Brand />
           <button onClick={() => setDrawer(false)}>
@@ -8637,9 +8638,8 @@ function DemoApp({ onExit }: { onExit: () => void }) {
               <small>{page}</small>
             </span>
           </div>
-          <aside>
-            <Badge color="blue">Somente leitura</Badge>
-          </aside>
+          <nav className="workspace-tabs" aria-label="Navegação principal da demonstração">{demoMenu.filter(([name]) => ["Hoje", "Funcionários", "Relatórios"].includes(name)).map(([name, Icon]) => <button key={name} className={page === name ? "active" : ""} onClick={() => setPage(name)}><Icon /><span>{name === "Hoje" ? "Visão geral" : name}</span></button>)}<button onClick={() => setDrawer(true)}><MoreHorizontal /><span>Mais</span></button></nav>
+          <aside><Badge color="blue">Demonstração</Badge></aside>
         </header>
         {notice && (
           <div className="demo-toast">
@@ -8651,7 +8651,7 @@ function DemoApp({ onExit }: { onExit: () => void }) {
           </div>
         )}
         <div key={page} className="admin-content page-fade">
-          <DemoGuide page={page} onNext={nextPage} />
+          {page !== "Hoje" && <DemoGuide page={page} onNext={nextPage} />}
           <DemoContent page={page} onBlocked={blocked} />
         </div>
         <nav
@@ -9475,8 +9475,7 @@ function Admin({ ctx, onRefresh }: { ctx: Context; onRefresh: () => void }) {
     const fromHash = (Object.entries(pageIds) as [Page, string][]).find(
       ([, id]) => id === location.hash.slice(1),
     )?.[0];
-    const stored = localStorage.getItem("pontonorte_admin_page") as Page | null;
-    return fromHash ?? (stored && pageIds[stored] ? stored : "Hoje");
+    return fromHash ?? "Hoje";
   });
   const [drawer, setDrawer] = useState(false);
   const visible = useMemo(
@@ -9530,8 +9529,8 @@ function Admin({ ctx, onRefresh }: { ctx: Context; onRefresh: () => void }) {
     location.reload();
   }
   return (
-    <main className="admin-shell">
-      <aside className={"side " + (drawer ? "open" : "")}>
+    <main className="admin-shell simple-workspace">
+      <aside className={"side " + (drawer ? "open" : "")} inert={!drawer} aria-hidden={!drawer}>
         <header>
           <Brand />
           <button onClick={() => setDrawer(false)}>
@@ -9584,11 +9583,11 @@ function Admin({ ctx, onRefresh }: { ctx: Context; onRefresh: () => void }) {
               <small>{page}</small>
             </span>
           </div>
-          <aside>
-            <button className="notify">
-              <Bell />
-            </button>
-          </aside>
+          <nav className="workspace-tabs" aria-label="Navegação principal">
+            {visible.filter(([name]) => ["Hoje", "Funcionários", "Relatórios"].includes(name)).map(([name, Icon]) => <button key={name} className={page === name ? "active" : ""} aria-current={page === name ? "page" : undefined} onClick={() => setPage(name)}><Icon /><span>{name === "Hoje" ? "Visão geral" : name}</span></button>)}
+            <button onClick={() => setDrawer(true)}><MoreHorizontal /><span>Mais</span></button>
+          </nav>
+          <aside><button className="workspace-user" onClick={logout} title="Sair" aria-label="Sair da conta"><span className="avatar">{initials(ctx.employee.full_name)}</span><LogOut /></button></aside>
         </header>
         <div key={page} className="admin-content page-fade">
           {page === "Hoje" && <Dashboard ctx={ctx} />}{" "}
@@ -9633,6 +9632,15 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [demo, setDemo] = useState(false);
+  const [publicAccess, setPublicAccess] = useState<{ mode: "cadastro" | "totem"; token: string } | null>(null);
+  useEffect(() => {
+    const sync = () => {
+      const match = location.hash.match(/^#(cadastro|totem)=(.+)$/);
+      setPublicAccess(match ? { mode: match[1] as "cadastro" | "totem", token: match[2] } : null);
+    };
+    sync(); addEventListener("hashchange", sync);
+    return () => removeEventListener("hashchange", sync);
+  }, []);
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -9688,6 +9696,7 @@ export default function Home() {
     });
     return () => data.subscription.unsubscribe();
   }, [load]);
+  if (publicAccess) return <PublicTeamAccess key={publicAccess.token} mode={publicAccess.mode} token={publicAccess.token} onDone={() => { setPublicAccess(null); void load(); }} />;
   if (demo)
     return (
       <DemoApp
