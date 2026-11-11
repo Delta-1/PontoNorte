@@ -7,7 +7,7 @@ android {
         applicationId "br.com.cpusis.pontonorte"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode (System.getenv("PN_VERSION_CODE") ?: "3").toInteger()
+        versionCode = Integer.parseInt(System.getenv("PN_VERSION_CODE") ?: "3")
         versionName "1.2.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
