@@ -9078,8 +9078,8 @@ function EmployeeWeb({
     await supabase.auth.signOut();
     location.reload();
   }
-  const validEntries = entries.filter(entry => entry.status !== "rejected");
-  const next = ["entry", "break_start", "break_end", "exit"][Math.min(validEntries.length, 3)];
+  const dayEntries = entries;
+  const next = ["entry", "break_start", "break_end", "exit"][Math.min(dayEntries.length, 3)];
   const primaryMethod = methods.find(item => item.enabled && item.method === "mobile")?.method || methods.find(item => item.enabled && item.method === "qr_code")?.method;
   const actionLabels: Record<string, string> = { entry: "Registrar entrada", break_start: "Sair para o intervalo", break_end: "Voltar do intervalo", exit: "Registrar saída" };
   return (
@@ -9113,16 +9113,16 @@ function EmployeeWeb({
                   }).format(new Date())}
                 </time>
                 <p>
-                  {validEntries.length >= 4 ? <b>Jornada de hoje concluída</b> : <>Próxima marcação: <b>{eventLabels[next]}</b></>}
+                  {dayEntries.length >= 4 ? <b>Jornada de hoje concluída</b> : <>Próxima marcação: <b>{eventLabels[next]}</b></>}
                 </p>
                 <div className="web-clock-actions simple-employee-action">
-                  <button disabled={!!busy || validEntries.length >= 4 || !primaryMethod} onClick={() => primaryMethod === "qr_code" ? setScanner(true) : record("mobile")}>
-                    {busy ? <RefreshCw className="spin" /> : validEntries.length >= 4 ? <Check /> : primaryMethod === "qr_code" ? <QrCode /> : <Clock3 />}
-                    <strong>{busy ? "Registrando…" : validEntries.length >= 4 ? "Tudo certo por hoje" : actionLabels[next]}</strong>
-                    <small>{validEntries.length >= 4 ? "Seus registros estão salvos" : primaryMethod === "qr_code" ? "Toque e leia seu QR Code" : "Toque para bater seu ponto"}</small>
+                  <button disabled={!!busy || dayEntries.length >= 4 || !primaryMethod} onClick={() => primaryMethod === "qr_code" ? setScanner(true) : record("mobile")}>
+                    {busy ? <RefreshCw className="spin" /> : dayEntries.length >= 4 ? <Check /> : primaryMethod === "qr_code" ? <QrCode /> : <Clock3 />}
+                    <strong>{busy ? "Registrando…" : dayEntries.length >= 4 ? "Tudo certo por hoje" : actionLabels[next]}</strong>
+                    <small>{dayEntries.length >= 4 ? "Seus registros estão salvos" : primaryMethod === "qr_code" ? "Toque e leia seu QR Code" : "Toque para bater seu ponto"}</small>
                   </button>
                 </div>
-                {primaryMethod === "mobile" && methods.some(item => item.enabled && item.method === "qr_code") ? <details className="web-other-method"><summary>Usar QR Code</summary><Button variant="outline" disabled={!!busy || validEntries.length >= 4} onClick={() => setScanner(true)}><QrCode />Ler meu QR Code</Button></details> : null}
+                {primaryMethod === "mobile" && methods.some(item => item.enabled && item.method === "qr_code") ? <details className="web-other-method"><summary>Usar QR Code</summary><Button variant="outline" disabled={!!busy || dayEntries.length >= 4} onClick={() => setScanner(true)}><QrCode />Ler meu QR Code</Button></details> : null}
                 {!primaryMethod ? <p>O responsável precisa liberar um método de ponto para sua conta.</p> : null}
               </article>
               {message && (

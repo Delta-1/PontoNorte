@@ -1675,8 +1675,8 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
   });
   const next = nextClockEvent(data.entries);
   const primaryMethod = preferredMethod(data.methods);
-  const validEntries = data.entries.filter(entry => entry.status !== "rejected");
-  const latest = validEntries.at(-1);
+  const dayEntries = data.entries;
+  const latest = dayEntries.at(-1);
   useEffect(() => {
     localStorage.setItem("pontonorte_employee_tab", tab);
   }, [tab]);
@@ -1980,10 +1980,10 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
         <article className="card today">
           <header>
             <h2>Registros de hoje</h2>
-            <span>{validEntries.length}/4</span>
+            <span>{dayEntries.length}/4</span>
           </header>
           {["entry", "break_start", "break_end", "exit"].map((type) => {
-            const e = validEntries.find((x) => x.event_type === type);
+            const e = dayEntries.find((x) => x.event_type === type);
             return (
               <div key={type}>
                 <span className={e ? "done" : ""}>{e && <Check />}</span>

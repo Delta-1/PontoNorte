@@ -10,7 +10,7 @@ test("the employee gets one primary method, prioritizing the button then QR",()=
 test("the next action progresses through the workday and ends after four records",()=>{
  const types=["entry","break_start","break_end","exit"];
  for(let count=0;count<=4;count++)assert.equal(nextClockEvent(types.slice(0,count).map(event_type=>({event_type,status:"valid"}))),types[count]??null);
- assert.equal(nextClockEvent([{event_type:"entry",status:"rejected"}]),"entry");
+ assert.equal(nextClockEvent([{event_type:"entry",status:"rejected"}]),"break_start");
 });
 test("update metadata pins the APK, version, signature and immutable download",()=>{
  const manifest=updateManifest({bytes:Buffer.from("example apk"),versionCode:1005,versionName:"1.2.0",certificateSha256:"a".repeat(64),commit:"b".repeat(40)});

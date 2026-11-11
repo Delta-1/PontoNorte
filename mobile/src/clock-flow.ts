@@ -4,6 +4,6 @@ export function preferredMethod(methods: {method:string;enabled:boolean}[]) {
   return ["mobile", "qr_code"].map(name => methods.find(method => method.method === name && method.enabled)).find(Boolean)?.method as "mobile"|"qr_code"|undefined;
 }
 export function nextClockEvent(entries: {event_type:string;status?:string}[]) {
-  const valid = entries.filter(entry => entry.status !== "rejected");
-  return valid.length >= events.length ? null : events[valid.length];
+  // Follow the sequence used by clock-event, which counts every saved event.
+  return entries.length >= events.length ? null : events[entries.length];
 }
