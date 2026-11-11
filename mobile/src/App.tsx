@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
 } from "react";
@@ -41,6 +42,9 @@ import { DeviceAuth } from "./native-auth";
 import { functionErrorMessage } from "./function-error";
 import { cboTitleFor, commonCboOptions, formatCbo, normalizeCbo } from "./cbo";
 import { EmployeeOnboarding } from "./EmployeeOnboarding";
+import { APP_VERSION } from "./app-version";
+import { actionLabels, nextClockEvent, preferredMethod } from "./clock-flow";
+import { AppUpdateNotice, checkForAppUpdates } from "./app-updates";
 
 type AppData = {
   employee: any;
@@ -184,31 +188,13 @@ function Login({ reload }: { reload: () => void }) {
       <header>
         <Brand />
       </header>
-      <div className="mode-switch">
-        <button
-          type="button"
-          className={mode === "employee" ? "active" : ""}
-          onClick={() => setMode("employee")}
-        >
-          <UserRound />
-          Meu acesso
-        </button>
-        <button
-          type="button"
-          className={mode === "terminal" ? "active" : ""}
-          onClick={() => setMode("terminal")}
-        >
-          <Building2 />
-          Aparelho da empresa
-        </button>
-      </div>
       <section className="login-copy">
         <span>{mode === "terminal" ? <Building2 /> : <ShieldCheck />}</span>
         <h1>{mode === "terminal" ? "Acessar aparelho" : "Entrar"}</h1>
         <p>
           {mode === "terminal"
             ? "Use o acesso do aparelho."
-            : "Código, usuário e senha."}
+            : "Entre uma vez. Depois, é só bater seu ponto."}
         </p>
       </section>
       <form onSubmit={submit}>
@@ -271,13 +257,7 @@ function Login({ reload }: { reload: () => void }) {
         <button className="primary" disabled={busy}>
           {busy ? <RefreshCw className="spin" /> : "Entrar"}
         </button>
-        <button
-          type="button"
-          className="outline"
-          onClick={() => setSignup(true)}
-        >
-          Criar conta da empresa
-        </button>
+        <details className="login-more"><summary>Sou responsável pela empresa</summary><button type="button" className="outline" onClick={() => setSignup(true)}>Criar conta da empresa</button><button type="button" className="text-button" onClick={() => setMode(mode === "terminal" ? "employee" : "terminal")}>{mode === "terminal" ? "Voltar ao acesso do funcionário" : "Configurar aparelho da empresa"}</button></details>
       </form>
     </main>
   );
@@ -1043,7 +1023,7 @@ function ManagementApp({
             method: "mobile",
             client_event_id: crypto.randomUUID(),
             device_uuid: data.device.device_uuid,
-            app_version: "1.1.1",
+            app_version: APP_VERSION,
             ...coords,
           },
         },
@@ -1679,11 +1659,12 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
   type EmployeeTab = "home" | "history" | "justification" | "profile";
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
-  const [tab, setTab] = useState<EmployeeTab>(
-    () =>
-      (localStorage.getItem("pontonorte_employee_tab") as EmployeeTab) ||
-      "home",
-  );
+  const [tab, setTab] = useState<EmployeeTab>("home");
+  const inFlight = useRef(false);
+  const pendingEvent = useRef<{ id: string; method: string } | null>(null);
+  const [now, setNow] = useState(() => new Date());
+  const [success, setSuccess] = useState(false);
+  useEffect(() => { const timer = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(timer); }, []);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({
     job_title: data.employee.job_title || "",
@@ -1692,9 +1673,10 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
     phone: data.employee.phone || "",
     email: data.employee.email || "",
   });
-  const next = ["entry", "break_start", "break_end", "exit"][
-    Math.min(data.entries.length, 3)
-  ];
+  const next = nextClockEvent(data.entries);
+  const primaryMethod = preferredMethod(data.methods);
+  const validEntries = data.entries.filter(entry => entry.status !== "rejected");
+  const latest = validEntries.at(-1);
   useEffect(() => {
     localStorage.setItem("pontonorte_employee_tab", tab);
   }, [tab]);
@@ -1715,7 +1697,9 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
     };
   }
   async function record(method: "mobile" | "qr_code" | "face") {
-    setBusy(method);
+    if (inFlight.current || !next) return;
+    inFlight.current = true;
+    setBusy(method); setSuccess(false);
     setMessage("");
     try {
       const configuredMethod = data.methods.find((item) => item.method === method && item.enabled);
@@ -1736,7 +1720,8 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
         throw new Error(
           "A empresa ainda precisa configurar o provedor de prova de vida.",
         );
-      const client_event_id = crypto.randomUUID();
+      if (!pendingEvent.current || pendingEvent.current.method !== method) pendingEvent.current = { id: crypto.randomUUID(), method };
+      const client_event_id = pendingEvent.current.id;
       const { data: response, error } = await supabase.functions.invoke(
         "clock-event",
         {
@@ -1744,7 +1729,7 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
             method,
             client_event_id,
             device_uuid: data.device?.device_uuid,
-            app_version: "1.1.1",
+            app_version: APP_VERSION,
             qr_token,
             ...coords,
           },
@@ -1758,16 +1743,16 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
           ),
         );
       if (response?.error) throw new Error(response.error);
-      setMessage(
-        `${labels[response.entry.event_type]} registrada às ${clock(response.entry.occurred_at)}.`,
-      );
+      setSuccess(true);
+      setMessage(`${labels[response.entry.event_type]} registrada às ${clock(response.entry.occurred_at)}.`);
+      pendingEvent.current = null;
       await reload();
     } catch (e) {
       setMessage(
         e instanceof Error ? e.message : "Não foi possível registrar.",
       );
     } finally {
-      setBusy("");
+      setBusy(""); inFlight.current = false;
     }
   }
   async function saveProfile(e: FormEvent) {
@@ -1960,6 +1945,8 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
                   <dd>{data.employee.cbo_title || "Não informada"}</dd>
                 </div>
               </dl>
+              <button className="outline" onClick={checkForAppUpdates}><RefreshCw />Verificar atualização</button>
+              <small className="app-version">Versão {APP_VERSION} · verificação automática</small>
               <button className="outline" onClick={() => logoutApp()}>
                 <LogOut />
                 Sair
@@ -1975,78 +1962,28 @@ function Home({ data, reload }: { data: AppData; reload: () => void }) {
       <Top data={data} />
       <section key="home" className="content page-transition">
         <p className="greeting">Olá, {data.employee.full_name.split(" ")[0]}</p>
-        <h1>Seu dia de trabalho</h1>
-        <article className="clock-card">
-          <header>
-            <span>
-              <CalendarDays />{" "}
-              {new Intl.DateTimeFormat("pt-BR", {
-                weekday: "long",
-                day: "2-digit",
-                month: "short",
-              }).format(new Date())}
-            </span>
-            <i>Online</i>
-          </header>
-          <time>
-            {new Intl.DateTimeFormat("pt-BR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            }).format(new Date())}
-          </time>
-          <p>
-            Próximo registro: <b>{labels[next]}</b>
-          </p>
-          <div className="methods">
-            {data.methods
-              .filter(
-                (m) =>
-                  m.enabled && ["mobile", "qr_code", "face"].includes(m.method),
-              )
-              .map((m) => (
-                <button
-                  key={m.method}
-                  disabled={!!busy || data.entries.length >= 4}
-                  onClick={() => record(m.method)}
-                >
-                  {m.method === "qr_code" ? (
-                    <QrCode />
-                  ) : m.method === "face" ? (
-                    <Fingerprint />
-                  ) : (
-                    <Smartphone />
-                  )}
-                  <span>{methodLabels[m.method]}</span>
-                  {busy === m.method && <RefreshCw className="spin" />}
-                </button>
-              ))}
-          </div>
+        <h1>Meu ponto</h1>
+        <article className="clock-card simple-clock">
+          <header><span><CalendarDays />{new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "short" }).format(now)}</span></header>
+          <time>{new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(now)}</time>
+          <p>{next ? <>Próxima marcação: <b>{labels[next]}</b></> : <b>Jornada de hoje concluída</b>}</p>
+          <button className="clock-primary" disabled={!!busy || !next || !primaryMethod} onClick={() => primaryMethod && record(primaryMethod)}>
+            {busy ? <RefreshCw className="spin" /> : !next ? <Check /> : primaryMethod === "qr_code" ? <QrCode /> : <Clock3 />}
+            <strong>{busy ? "Registrando…" : !next ? "Tudo certo por hoje" : actionLabels[next]}</strong>
+            <small>{next ? primaryMethod === "qr_code" ? "Toque e leia seu QR Code" : "Toque para bater seu ponto" : "Seus registros estão salvos"}</small>
+          </button>
+          {!primaryMethod && next ? <p className="clock-help">O responsável precisa liberar um método de ponto para sua conta.</p> : null}
+          {primaryMethod === "mobile" && data.methods.some(method => method.enabled && method.method === "qr_code") ? <details className="other-clock-methods"><summary>Usar QR Code</summary><button className="outline" disabled={!!busy || !next} onClick={() => record("qr_code")}><QrCode />Ler meu QR Code</button></details> : null}
+          {latest ? <div className="last-clock"><Check /><span>Último registro: {labels[latest.event_type]} às {clock(latest.occurred_at)}</span></div> : null}
         </article>
-        {message && (
-          <div
-            className={
-              message.includes("registrada") ? "notice success" : "notice"
-            }
-          >
-            {message}
-          </div>
-        )}
-        <article className="card location">
-          <MapPin />
-          <p>
-            <b>Localização protegida</b>
-            <small>
-              Usada apenas na validação do registro, conforme regras da empresa.
-            </small>
-          </p>
-        </article>
+        {message ? <div role={success ? "status" : "alert"} className={success ? "notice success" : "notice"}>{message}</div> : null}
         <article className="card today">
           <header>
             <h2>Registros de hoje</h2>
-            <span>{data.entries.length}/4</span>
+            <span>{validEntries.length}/4</span>
           </header>
           {["entry", "break_start", "break_end", "exit"].map((type) => {
-            const e = data.entries.find((x) => x.event_type === type);
+            const e = validEntries.find((x) => x.event_type === type);
             return (
               <div key={type}>
                 <span className={e ? "done" : ""}>{e && <Check />}</span>
@@ -2285,7 +2222,6 @@ export default function App() {
   const [locked, setLocked] = useState(false);
   const [unlockError, setUnlockError] = useState("");
   const reload = useCallback(async () => {
-    setLoading(true);
     setError("");
     const {
       data: { session },
@@ -2365,7 +2301,7 @@ export default function App() {
           device_uuid: id.identifier,
           device_name: info.model || "Celular Android",
           platform: info.platform,
-          app_version: "1.1.1",
+          app_version: APP_VERSION,
         })
         .select("*")
         .single();
@@ -2529,5 +2465,5 @@ export default function App() {
       return <ManagementApp data={data} reload={reload} />;
     return <Home data={data} reload={reload} />;
   }, [data, error, loading, locked, reload, unlock, unlockError]);
-  return content;
+  return <><AppUpdateNotice />{content}</>;
 }

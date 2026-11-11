@@ -8865,18 +8865,14 @@ function EmployeeWeb({
   ctx: Context;
   onRefresh: () => void;
 }) {
-  const [tab, setTab] = useState<EmployeeWebTab>(() => {
-    if (typeof window === "undefined") return "clock";
-    return (
-      (localStorage.getItem("pontonorte_employee_web_tab") as EmployeeWebTab) ||
-      "clock"
-    );
-  });
+  const [tab, setTab] = useState<EmployeeWebTab>("clock");
   const [entries, setEntries] = useState<any[]>([]);
   const [methods, setMethods] = useState<any[]>([]);
   const [justifications, setJustifications] = useState<any[]>([]);
   const [bankBalance, setBankBalance] = useState<any>(null);
   const [busy, setBusy] = useState("");
+  const clockInFlight = useRef(false);
+  const pendingClockEvent = useRef<{ id: string; method: string } | null>(null);
   const [message, setMessage] = useState("");
   const [scanner, setScanner] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -8979,6 +8975,8 @@ function EmployeeWeb({
     );
   }
   async function record(methodName: "mobile" | "qr_code", qr_token?: string) {
+    if (clockInFlight.current) return;
+    clockInFlight.current = true;
     setBusy(methodName);
     setMessage("");
     setScanner(false);
@@ -8989,11 +8987,12 @@ function EmployeeWeb({
       if (!method)
         throw new Error("Este método não está habilitado pela empresa.");
       const coords = await position(Boolean(method.require_location));
+      if (!pendingClockEvent.current || pendingClockEvent.current.method !== methodName) pendingClockEvent.current = { id: crypto.randomUUID(), method: methodName };
       const { data, error } = await supabase.functions.invoke("clock-event", {
         body: {
           method: methodName,
           qr_token,
-          client_event_id: crypto.randomUUID(),
+          client_event_id: pendingClockEvent.current.id,
           device_uuid: deviceId,
           app_version: "web-mobile-1.2.0",
           ...coords,
@@ -9009,6 +9008,7 @@ function EmployeeWeb({
       setMessage(
         `${eventLabels[data.entry.event_type]} registrada às ${dateTime(data.entry.occurred_at).split(" ").at(-1)}.`,
       );
+      pendingClockEvent.current = null;
       await load();
     } catch (reason) {
       setMessage(
@@ -9017,7 +9017,7 @@ function EmployeeWeb({
           : "Não foi possível registrar o ponto.",
       );
     } finally {
-      setBusy("");
+      setBusy(""); clockInFlight.current = false;
     }
   }
   async function saveProfile(e: FormEvent) {
@@ -9078,9 +9078,10 @@ function EmployeeWeb({
     await supabase.auth.signOut();
     location.reload();
   }
-  const next = ["entry", "break_start", "break_end", "exit"][
-    Math.min(entries.length, 3)
-  ];
+  const validEntries = entries.filter(entry => entry.status !== "rejected");
+  const next = ["entry", "break_start", "break_end", "exit"][Math.min(validEntries.length, 3)];
+  const primaryMethod = methods.find(item => item.enabled && item.method === "mobile")?.method || methods.find(item => item.enabled && item.method === "qr_code")?.method;
+  const actionLabels: Record<string, string> = { entry: "Registrar entrada", break_start: "Sair para o intervalo", break_end: "Voltar do intervalo", exit: "Registrar saída" };
   return (
     <main className="mobile-stage employee-web-stage">
       <section className="phone employee-app employee-web-app">
@@ -9094,7 +9095,7 @@ function EmployeeWeb({
               <p className="greeting">
                 Olá, {ctx.employee.full_name.split(" ")[0]}
               </p>
-              <h1>Seu dia de trabalho</h1>
+              <h1>Meu ponto</h1>
               <article className="clock-card">
                 <header>
                   <span>
@@ -9112,34 +9113,17 @@ function EmployeeWeb({
                   }).format(new Date())}
                 </time>
                 <p>
-                  Próximo registro: <b>{eventLabels[next]}</b>
+                  {validEntries.length >= 4 ? <b>Jornada de hoje concluída</b> : <>Próxima marcação: <b>{eventLabels[next]}</b></>}
                 </p>
-                <div className="web-clock-actions">
-                  {methods.some(
-                    (item) => item.method === "mobile" && item.enabled,
-                  ) && (
-                    <button
-                      onClick={() => record("mobile")}
-                      disabled={!!busy || entries.length >= 4}
-                    >
-                      <Smartphone />
-                      {busy === "mobile"
-                        ? "Registrando…"
-                        : "Tocar para registrar"}
-                    </button>
-                  )}
-                  {methods.some(
-                    (item) => item.method === "qr_code" && item.enabled,
-                  ) && (
-                    <button
-                      onClick={() => setScanner(true)}
-                      disabled={!!busy || entries.length >= 4}
-                    >
-                      <QrCode />
-                      Ler meu QR Code
-                    </button>
-                  )}
+                <div className="web-clock-actions simple-employee-action">
+                  <button disabled={!!busy || validEntries.length >= 4 || !primaryMethod} onClick={() => primaryMethod === "qr_code" ? setScanner(true) : record("mobile")}>
+                    {busy ? <RefreshCw className="spin" /> : validEntries.length >= 4 ? <Check /> : primaryMethod === "qr_code" ? <QrCode /> : <Clock3 />}
+                    <strong>{busy ? "Registrando…" : validEntries.length >= 4 ? "Tudo certo por hoje" : actionLabels[next]}</strong>
+                    <small>{validEntries.length >= 4 ? "Seus registros estão salvos" : primaryMethod === "qr_code" ? "Toque e leia seu QR Code" : "Toque para bater seu ponto"}</small>
+                  </button>
                 </div>
+                {primaryMethod === "mobile" && methods.some(item => item.enabled && item.method === "qr_code") ? <details className="web-other-method"><summary>Usar QR Code</summary><Button variant="outline" disabled={!!busy || validEntries.length >= 4} onClick={() => setScanner(true)}><QrCode />Ler meu QR Code</Button></details> : null}
+                {!primaryMethod ? <p>O responsável precisa liberar um método de ponto para sua conta.</p> : null}
               </article>
               {message && (
                 <div
